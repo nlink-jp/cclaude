@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [0.3.3] - 2026-04-05
+
+### Fixed
+
+- Add `zip` to container image for release packaging (`make package`).
+- Add `.claude/` to `.gitignore`.
+
 ## [0.3.2] - 2026-04-04
 
 ### Fixed
@@ -98,6 +105,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - BATS test suite (24 tests) and shellcheck-clean.
 
 
+[0.3.3]: https://github.com/nlink-jp/cclaude/releases/tag/v0.3.3
 [0.3.2]: https://github.com/nlink-jp/cclaude/releases/tag/v0.3.2
 [0.3.1]: https://github.com/nlink-jp/cclaude/releases/tag/v0.3.1
 [0.3.0]: https://github.com/nlink-jp/cclaude/releases/tag/v0.3.0
