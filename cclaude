@@ -383,9 +383,14 @@ run_claude_ssh() {
     "$runtime" stop "${CCC_CONTAINER_NAME}" &>/dev/null || true
 
     # Start container with sshd
-    if ! "$runtime" "${run_args[@]}" "$image" bash -c "$init_script" >/dev/null 2>&1; then
-        # Show the actual error
-        "$runtime" "${run_args[@]}" "$image" bash -c "$init_script" 2>&1 || true
+    local start_err
+    if ! start_err="$("$runtime" "${run_args[@]}" "$image" bash -c "$init_script" 2>&1)"; then
+        printf '%s\n' "$start_err" >&2
+        if [[ "$start_err" == *"proxy already running"* ]] || [[ "$start_err" == *"address already in use"* ]]; then
+            warn "A port conflict was detected. Published ports may already be in use."
+            warn "Check config: publish_ports in ~/.config/cclaude/config.toml"
+            warn "To release ports, restart Podman Machine: podman machine stop && podman machine start"
+        fi
         die "Failed to start container."
     fi
 
