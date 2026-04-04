@@ -127,11 +127,23 @@ image = "from-config:v1"'
 # SSH agent forwarding
 # =========================================================================
 
-@test "SSH_AUTH_SOCK forwarded when set" {
+@test "SSH_AUTH_SOCK forwarded when set on Linux" {
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        skip "SSH agent forwarding is disabled on macOS"
+    fi
     SSH_AUTH_SOCK="/tmp/test-ssh" run_ccc_dry_with_runtime podman
     [ "$status" -eq 0 ]
     [[ "$output" =~ "-v /tmp/test-ssh:/ssh-agent" ]]
     [[ "$output" =~ "SSH_AUTH_SOCK=/ssh-agent" ]]
+}
+
+@test "SSH_AUTH_SOCK not forwarded on macOS" {
+    if [[ "$(uname -s)" != "Darwin" ]]; then
+        skip "Only applies on macOS"
+    fi
+    SSH_AUTH_SOCK="/tmp/test-ssh" run_ccc_dry_with_runtime podman
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "ssh-agent" ]]
 }
 
 @test "SSH_AUTH_SOCK not forwarded when unset" {

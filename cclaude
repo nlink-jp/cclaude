@@ -218,8 +218,8 @@ run_claude() {
         run_args+=(-e "GIT_AUTHOR_EMAIL=${git_email}" -e "GIT_COMMITTER_EMAIL=${git_email}")
     fi
 
-    # SSH agent forwarding
-    if [[ -n "${SSH_AUTH_SOCK:-}" ]]; then
+    # SSH agent forwarding (skip on macOS — launchd sockets cannot be mounted into VMs)
+    if [[ -n "${SSH_AUTH_SOCK:-}" && "$(uname -s)" != "Darwin" ]]; then
         run_args+=(-v "${SSH_AUTH_SOCK}:/ssh-agent" -e "SSH_AUTH_SOCK=/ssh-agent")
     fi
 
