@@ -270,7 +270,7 @@ setup_ssh_agent_mount() {
 
 # Use a random high port to avoid conflicts and reduce exposure
 CCC_SSH_PORT="${CCC_SSH_PORT:-$((49152 + RANDOM % 16384))}"
-CCC_CONTAINER_NAME="cclaude-ssh-$$"
+CCC_CONTAINER_NAME="cclaude-ssh"
 
 run_claude_ssh() {
     local runtime image host_claude_home project_dir
