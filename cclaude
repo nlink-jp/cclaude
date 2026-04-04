@@ -175,7 +175,7 @@ build_image() {
     node_ver="$(resolve CCC_NODE_VERSION toolchain node_version 20)"
 
     printf 'cclaude: building image %s ...\n' "$image" >&2
-    "$runtime" build \
+    "$runtime" build --no-cache \
         --build-arg "GO_VERSION=${go_ver}" \
         --build-arg "NODE_VERSION=${node_ver}" \
         -t "$image" \
