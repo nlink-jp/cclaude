@@ -225,45 +225,162 @@ SETTINGS
 }
 
 # ---------------------------------------------------------------------------
-# SSH agent forwarding
+# SSH agent forwarding (socket mount — Linux only)
 # ---------------------------------------------------------------------------
 
-# Detect and configure SSH agent socket for the container.
-# Supports: 1Password SSH agent, standard ssh-agent.
-# On macOS, only 1Password (or other file-based) sockets work; the default
-# launchd-managed SSH_AUTH_SOCK cannot be mounted into container VMs.
-
-# Print SSH agent mount args to stdout (one per line), to be consumed by caller.
-# Returns nothing if no agent is available.
-get_ssh_agent_args() {
+setup_ssh_agent_mount() {
     local runtime="$1"
-
-    # macOS: Unix domain sockets cannot pass through virtiofs (Podman Machine)
-    # or be directly mounted in most cases. Docker Desktop has gRPC-based
-    # socket forwarding that may work, but is not guaranteed.
-    #
-    # Linux: sockets can be bind-mounted directly.
-
+    # macOS: Unix domain sockets cannot pass through virtiofs.
+    # Use --ssh mode instead for SSH agent forwarding on macOS.
     if [[ "$(uname -s)" == "Darwin" ]]; then
-        # On macOS, SSH agent sockets (1Password, launchd) cannot be forwarded
-        # into Podman Machine VMs due to virtiofs limitations.
-        # Git over HTTPS is recommended; SSH keys can be configured inside
-        # the container separately if needed.
         return
     fi
-
-    # Linux: forward standard SSH_AUTH_SOCK
     if [[ -n "${SSH_AUTH_SOCK:-}" ]]; then
-        printf '%s\n' "-v" "${SSH_AUTH_SOCK}:/ssh-agent" "-e" "SSH_AUTH_SOCK=/ssh-agent"
+        run_args+=(-v "${SSH_AUTH_SOCK}:/ssh-agent" -e "SSH_AUTH_SOCK=/ssh-agent")
     fi
 }
 
-setup_ssh_agent() {
-    local runtime="$1"
-    local arg
-    while IFS= read -r arg; do
-        run_args+=("$arg")
-    done < <(get_ssh_agent_args "$runtime")
+# ---------------------------------------------------------------------------
+# SSH mode: run container with sshd, connect via ssh -A for agent forwarding
+# ---------------------------------------------------------------------------
+
+CCC_SSH_PORT="${CCC_SSH_PORT:-2222}"
+CCC_CONTAINER_NAME="cclaude-ssh-$$"
+
+run_claude_ssh() {
+    local runtime image host_claude_home project_dir
+    runtime="$(detect_runtime)"
+    image="$(resolve CCC_IMAGE container image "$CCC_DEFAULT_IMAGE")"
+    host_claude_home="$(resolve CCC_CLAUDE_HOME paths claude_home "$HOME/.claude")"
+    host_claude_home="${host_claude_home/#\~/$HOME}"
+    project_dir="$(pwd)"
+
+    if [[ "${CCC_DRY_RUN:-}" != "1" ]]; then
+        ensure_image "$runtime" "$image"
+        prepare_claude_home "$host_claude_home"
+    fi
+
+    # Prepare host public key for container auth
+    local pubkey="DRY_RUN_PLACEHOLDER"
+    if [[ "${CCC_DRY_RUN:-}" != "1" ]]; then
+        pubkey=""
+        local key_candidates=(
+            "${HOME}/.ssh/id_ed25519.pub"
+            "${HOME}/.ssh/id_rsa.pub"
+            "${HOME}/.ssh/id_ecdsa.pub"
+        )
+        for k in "${key_candidates[@]}"; do
+            if [[ -f "$k" ]]; then
+                pubkey="$(cat "$k")"
+                break
+            fi
+        done
+        if [[ -z "$pubkey" ]]; then
+            die "No SSH public key found in ~/.ssh/. Generate one with: ssh-keygen -t ed25519"
+        fi
+    fi
+
+    local -a run_args=(
+        run -d --rm
+        --name "${CCC_CONTAINER_NAME}"
+        --hostname cclaude
+        -v "${project_dir}:${project_dir}"
+        -w "${project_dir}"
+        -v "${CCC_CONTAINER_CLAUDE_HOME}:/root/.claude"
+        -p "127.0.0.1:${CCC_SSH_PORT}:22"
+        -p "127.0.0.1:19400-19499:19400-19499"
+        -e "TERM=${TERM:-xterm-256color}"
+    )
+
+    # API key
+    if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+        run_args+=(-e "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}")
+    fi
+
+    # Git identity
+    local git_name git_email
+    git_name="$(git config user.name 2>/dev/null || true)"
+    git_email="$(git config user.email 2>/dev/null || true)"
+    if [[ -n "$git_name" ]]; then
+        run_args+=(-e "GIT_AUTHOR_NAME=${git_name}" -e "GIT_COMMITTER_NAME=${git_name}")
+    fi
+    if [[ -n "$git_email" ]]; then
+        run_args+=(-e "GIT_AUTHOR_EMAIL=${git_email}" -e "GIT_COMMITTER_EMAIL=${git_email}")
+    fi
+
+    # Host network access
+    local host_gw
+    if [[ "$runtime" == "podman" ]]; then
+        host_gw="host.containers.internal"
+        run_args+=(--add-host "${host_gw}:host-gateway")
+        run_args+=(--security-opt "label=disable")
+    else
+        host_gw="host.docker.internal"
+        run_args+=(--add-host "${host_gw}:host-gateway")
+    fi
+
+    # Port forwarding (socat) and publishing
+    local -a forward_ports=()
+    read_port_list forward_ports "CCC_FORWARD_PORTS" "network" "forward_ports"
+    local -a publish_ports=()
+    read_port_list publish_ports "CCC_PUBLISH_PORTS" "network" "publish_ports"
+    if [[ ${#publish_ports[@]} -gt 0 ]]; then
+        for p in "${publish_ports[@]}"; do
+            run_args+=(-p "127.0.0.1:${p}:${p}")
+        done
+    fi
+
+    # Build entrypoint: inject pubkey, start socat forwarders, start sshd
+    local init_script="mkdir -p /root/.ssh && chmod 700 /root/.ssh"
+    init_script+=" && printf '%s\\n' '${pubkey}' > /root/.ssh/authorized_keys"
+    init_script+=" && chmod 600 /root/.ssh/authorized_keys"
+    local socat_cmds=""
+    if [[ ${#forward_ports[@]} -gt 0 ]]; then
+        for p in "${forward_ports[@]}"; do
+            socat_cmds+="socat TCP-LISTEN:${p},fork,reuseaddr TCP:${host_gw}:${p} & "
+        done
+    fi
+    init_script+=" && ${socat_cmds}/usr/sbin/sshd -D"
+
+    if [[ "${CCC_DRY_RUN:-}" == "1" ]]; then
+        printf '%s' "$runtime"
+        printf ' %s' "${run_args[@]}"
+        printf ' %s bash -c "%s"\n' "$image" "$init_script"
+        printf 'ssh -A -t -p %s -o StrictHostKeyChecking=no root@127.0.0.1 claude' "$CCC_SSH_PORT"
+        for arg in "$@"; do
+            printf ' %s' "$arg"
+        done
+        printf '\n'
+        return 0
+    fi
+
+    # Clean up on exit
+    cleanup_ssh_container() {
+        "$runtime" stop "${CCC_CONTAINER_NAME}" &>/dev/null || true
+    }
+    trap cleanup_ssh_container EXIT
+
+    # Start container with sshd
+    "$runtime" "${run_args[@]}" "$image" bash -c "$init_script" >/dev/null
+
+    # Wait for sshd to be ready
+    local retries=0
+    while ! ssh -q -p "$CCC_SSH_PORT" -o StrictHostKeyChecking=no -o BatchMode=yes root@127.0.0.1 true 2>/dev/null; do
+        retries=$((retries + 1))
+        if [[ $retries -ge 30 ]]; then
+            die "Timed out waiting for container sshd on port ${CCC_SSH_PORT}."
+        fi
+        sleep 0.2
+    done
+
+    # Connect with agent forwarding and run claude
+    ssh -A -t \
+        -p "$CCC_SSH_PORT" \
+        -o StrictHostKeyChecking=no \
+        -o UserKnownHostsFile=/dev/null \
+        -o LogLevel=ERROR \
+        root@127.0.0.1 \
+        "cd '${project_dir}' && claude $*"
 }
 
 # ---------------------------------------------------------------------------
@@ -319,8 +436,8 @@ run_claude() {
         run_args+=(-e "GIT_AUTHOR_EMAIL=${git_email}" -e "GIT_COMMITTER_EMAIL=${git_email}")
     fi
 
-    # SSH agent forwarding
-    setup_ssh_agent "$runtime"
+    # SSH agent forwarding (socket mount — Linux only)
+    setup_ssh_agent_mount "$runtime"
 
     # Host network access
     local host_gw
@@ -477,6 +594,7 @@ Usage:
 
 Options:
   --build        Build or rebuild the container image
+  --ssh          Connect via SSH with agent forwarding (enables host SSH keys)
   --shell        Open a bash shell inside the container (debug)
   --config       Show resolved configuration
   --version      Print version
@@ -484,6 +602,7 @@ Options:
 
 Examples:
   cclaude                        Launch Claude Code for the current directory
+  cclaude --ssh                  Launch with SSH agent forwarding (1Password, etc.)
   cclaude --build                Build the container image
   cclaude -- -p "run tests"      Pass arguments to claude
 
@@ -520,6 +639,10 @@ main() {
             runtime="$(detect_runtime)"
             image="$(resolve CCC_IMAGE container image "$CCC_DEFAULT_IMAGE")"
             build_image "$runtime" "$image"
+            ;;
+        --ssh)
+            shift
+            run_claude_ssh "$@"
             ;;
         --shell)
             shift

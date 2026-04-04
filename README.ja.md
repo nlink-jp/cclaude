@@ -219,9 +219,19 @@ publish_ports = [3000, 5173]
 
 ### SSH エージェント転送
 
-**Linux**: `SSH_AUTH_SOCK` が設定されている場合、SSH エージェントソケットが自動的にコンテナに転送されます。標準の ssh-agent と 1Password SSH エージェントの両方に対応しています。
+`--ssh` モードを使うと、ホストの SSH エージェント（1Password 含む）をコンテナに転送できます。コンテナ内で sshd を起動し `ssh -A` で接続することで、全プラットフォームで動作します:
 
-**macOS**: Unix ドメインソケット（1Password、launchd ssh-agent とも）は Podman Machine / Docker Desktop が使用する VM 層（virtiofs）を通して転送できません。git 操作には HTTPS を使用するか、コンテナ内で個別に SSH 鍵を設定してください。
+```bash
+cclaude --ssh
+```
+
+コンテナ内で `git clone`、`git push` などの SSH 操作がホストの SSH 鍵を使って行えます。鍵をコンテナにコピーする必要はありません。
+
+**仕組み**: コンテナ内で sshd を起動し、ホストの SSH 公開鍵を認証用に注入、`ssh -A` でエージェント転送付きで接続します。終了時にコンテナは自動的に停止・削除されます。
+
+**要件**: `~/.ssh/` に SSH 公開鍵（ed25519、RSA、または ECDSA）が必要です。
+
+**デフォルトモード（`--ssh` なし）**: Linux では `SSH_AUTH_SOCK` がコンテナに直接マウントされます（高速、sshd 不要）。macOS ではデフォルトモードで SSH エージェントは利用できません（VM の制約）。代わりに `--ssh` を使用してください。
 
 ## イメージのカスタマイズ
 

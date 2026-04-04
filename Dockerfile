@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         jq \
         make \
         openssh-client \
+        openssh-server \
         ripgrep \
         socat \
         unzip \
@@ -50,6 +51,14 @@ RUN ARCH="$(dpkg --print-architecture)" \
 # ---- golangci-lint ----
 RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh \
     | sh -s -- -b /usr/local/bin
+
+# ---- sshd for agent forwarding ----
+RUN mkdir -p /run/sshd \
+    && ssh-keygen -A \
+    && sed -i 's/^#\?AllowAgentForwarding.*/AllowAgentForwarding yes/' /etc/ssh/sshd_config \
+    && sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config \
+    && sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config \
+    && mkdir -p /root/.ssh && chmod 700 /root/.ssh
 
 # ---- Container defaults ----
 # Allow any mounted git repo

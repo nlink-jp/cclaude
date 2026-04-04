@@ -228,9 +228,19 @@ Without port forwarding, host services are also available via runtime-specific h
 
 ### SSH Agent Forwarding
 
-**Linux**: If `SSH_AUTH_SOCK` is set, the SSH agent socket is forwarded into the container automatically. This supports both standard ssh-agent and 1Password SSH agent.
+Use `--ssh` mode to forward your host SSH agent (including 1Password) into the container. This works on all platforms by running sshd inside the container and connecting via `ssh -A`:
 
-**macOS**: Unix domain sockets (including 1Password and launchd ssh-agent) cannot be forwarded through the VM layer (virtiofs) used by Podman Machine and Docker Desktop. Use HTTPS for git operations, or configure SSH keys inside the container separately.
+```bash
+cclaude --ssh
+```
+
+This enables `git clone`, `git push`, and other SSH operations inside the container using your host's SSH keys — without copying keys into the container.
+
+**How it works**: The container starts sshd, your host's SSH public key is injected for authentication, and `cclaude` connects via `ssh -A` which forwards the agent. On exit, the container is automatically stopped and removed.
+
+**Requirements**: An SSH public key in `~/.ssh/` (ed25519, RSA, or ECDSA).
+
+**Default mode (without `--ssh`)**: On Linux, `SSH_AUTH_SOCK` is mounted directly into the container (faster, no sshd needed). On macOS, SSH agent is not available in default mode due to VM limitations — use `--ssh` instead.
 
 ---
 

@@ -239,6 +239,29 @@ image = "from-config:v1"'
 # Shell mode
 # =========================================================================
 
+# =========================================================================
+# SSH mode (dry-run)
+# =========================================================================
+
+@test "--ssh mode starts detached container with sshd" {
+    CCC_DRY_RUN=1 CCC_RUNTIME=podman run "$CCC_BIN" --ssh
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "run -d --rm" ]]
+    [[ "$output" =~ "sshd -D" ]]
+    [[ "$output" =~ "authorized_keys" ]]
+}
+
+@test "--ssh mode includes ssh -A command" {
+    CCC_DRY_RUN=1 CCC_RUNTIME=podman run "$CCC_BIN" --ssh
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "ssh -A -t" ]]
+    [[ "$output" =~ "claude" ]]
+}
+
+# =========================================================================
+# Shell mode
+# =========================================================================
+
 @test "--shell launches bash instead of claude" {
     CCC_DRY_RUN=1 CCC_RUNTIME=podman run "$CCC_BIN" --shell
     [ "$status" -eq 0 ]
