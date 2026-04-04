@@ -189,6 +189,20 @@ ensure_image() {
     if ! image_exists "$runtime" "$image"; then
         printf 'cclaude: image %s not found. Building...\n' "$image" >&2
         build_image "$runtime" "$image"
+        return
+    fi
+    # Warn if Dockerfile is newer than the image
+    local dockerfile
+    dockerfile="$(locate_dockerfile 2>/dev/null)" || return
+    local img_created
+    img_created="$("$runtime" image inspect --format '{{.Created}}' "$image" 2>/dev/null)" || return
+    local img_epoch df_epoch
+    img_epoch="$(date -j -f "%Y-%m-%d %H:%M:%S" "${img_created%.*}" "+%s" 2>/dev/null)" \
+        || img_epoch="$(date -d "${img_created%.*}" "+%s" 2>/dev/null)" || return
+    df_epoch="$(stat -f "%m" "$dockerfile" 2>/dev/null)" \
+        || df_epoch="$(stat -c "%Y" "$dockerfile" 2>/dev/null)" || return
+    if [[ "$df_epoch" -gt "$img_epoch" ]]; then
+        warn "Dockerfile is newer than image '$image'. Run 'cclaude --build' to rebuild."
     fi
 }
 
@@ -255,7 +269,8 @@ setup_ssh_agent_mount() {
 # SSH mode: run container with sshd, connect via ssh -A for agent forwarding
 # ---------------------------------------------------------------------------
 
-CCC_SSH_PORT="${CCC_SSH_PORT:-2222}"
+# Use a random high port to avoid conflicts and reduce exposure
+CCC_SSH_PORT="${CCC_SSH_PORT:-$((49152 + RANDOM % 16384))}"
 CCC_CONTAINER_NAME="cclaude-ssh-$$"
 
 run_claude_ssh() {

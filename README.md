@@ -21,7 +21,7 @@
 ### Prerequisites
 
 - [Podman](https://podman.io/) or [Docker](https://www.docker.com/)
-- Bash 4+
+- Bash 3.2+
 
 ### Install from source
 
@@ -304,11 +304,21 @@ Volume mounts through a Linux VM may have slower I/O than native Linux. This is 
 
 ### Docker: File Ownership
 
-When using Docker (not Podman), files created inside the container may be owned by root on the host. Podman's rootless mode maps container root to your host user, avoiding this issue.
+When using Docker (not Podman), files created inside the container may be owned by root on the host. Podman's rootless mode maps container root to your host user, avoiding this issue. If this is a problem, you can fix ownership after exiting:
+
+```bash
+sudo chown -R "$(id -u):$(id -g)" .
+```
 
 ### SELinux (Podman)
 
 When using Podman, `--security-opt label=disable` is automatically applied to allow bind-mounted volumes to work under SELinux.
+
+### Security: `--ssh` mode
+
+In `--ssh` mode, sshd runs inside the container and listens on a **random high port** (49152–65535) bound to `127.0.0.1` only. Access is protected by an ephemeral ed25519 key pair that is generated per session and destroyed on exit. No password authentication is allowed.
+
+Note: other users on the same host cannot connect because they do not possess the ephemeral private key, but the port is technically reachable from `127.0.0.1`. If this is a concern in shared-host environments, consider additional network isolation.
 
 ---
 
