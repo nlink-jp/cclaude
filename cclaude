@@ -368,16 +368,16 @@ run_claude_ssh() {
         return 0
     fi
 
-    # Clean up on exit: stop container and remove ephemeral key
-    # Capture variables for use in trap (avoid unbound variable errors)
-    local _cleanup_runtime="$runtime"
-    local _cleanup_container="$CCC_CONTAINER_NAME"
-    local _cleanup_key="${ssh_key:-}"
+    # Clean up on exit: stop container and remove ephemeral key.
+    # Use global variables — local vars are not visible to trap handlers.
+    _CCC_CLEANUP_RUNTIME="$runtime"
+    _CCC_CLEANUP_CONTAINER="$CCC_CONTAINER_NAME"
+    _CCC_CLEANUP_KEY="${ssh_key:-}"
     cleanup_ssh_container() {
-        "$_cleanup_runtime" stop "$_cleanup_container" &>/dev/null || true
-        if [[ -n "$_cleanup_key" ]]; then
-            rm -f "$_cleanup_key" "${_cleanup_key}.pub"
-            rmdir "$(dirname "$_cleanup_key")" 2>/dev/null || true
+        "$_CCC_CLEANUP_RUNTIME" stop "$_CCC_CLEANUP_CONTAINER" &>/dev/null || true
+        if [[ -n "${_CCC_CLEANUP_KEY:-}" ]]; then
+            rm -f "$_CCC_CLEANUP_KEY" "${_CCC_CLEANUP_KEY}.pub"
+            rmdir "$(dirname "$_CCC_CLEANUP_KEY")" 2>/dev/null || true
         fi
     }
     trap cleanup_ssh_container EXIT INT TERM
