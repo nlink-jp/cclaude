@@ -170,11 +170,24 @@ rm -rf ~/.config/cclaude/claude-home
 cclaude    # ホストの ~/.claude/ から再コピー
 ```
 
+### ホストネットワークアクセス
+
+コンテナからホスト上で動作するサービス（例: ローカル LLM API エンドポイント）にアクセスできます。コンテナ内では以下のホスト名を使用してください:
+
+| ランタイム | ホスト名 |
+|-----------|----------|
+| Podman | `host.containers.internal` |
+| Docker | `host.docker.internal` |
+
+例: ローカル LLM API が `localhost:8080` で動作している場合、コンテナ内からは `http://host.containers.internal:8080`（Podman）または `http://host.docker.internal:8080`（Docker）でアクセスできます。
+
 ### SSH エージェント転送
 
-Linux では `SSH_AUTH_SOCK` が設定されている場合、SSH エージェントソケットがコンテナに転送され、
-`git clone` / `git push`（SSH 経由）が可能になります。
-macOS では launchd ソケットをコンテナ VM にマウントできないため、この機能は無効です。
+**Linux**: `SSH_AUTH_SOCK` が設定されている場合、SSH エージェントソケットが自動的にコンテナに転送されます。
+
+**macOS（1Password SSH エージェント）**: `cclaude` は 1Password SSH エージェントソケット（`~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock`）を自動検出します。Docker Desktop では直接マウント可能です。Podman Machine では VM へのソケット転送を手動で設定する必要があります（[Podman Machine SSH forwarding](https://docs.podman.io/en/latest/markdown/podman-machine.1.html) 参照）。
+
+**macOS（デフォルト ssh-agent）**: launchd が管理するデフォルトの `SSH_AUTH_SOCK` はコンテナ VM にマウントできません。1Password SSH エージェントを使用するか、コンテナ内で鍵ベースの認証を設定してください。
 
 ## イメージのカスタマイズ
 

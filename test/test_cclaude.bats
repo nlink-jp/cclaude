@@ -176,6 +176,22 @@ image = "from-config:v1"'
 }
 
 # =========================================================================
+# Host network access
+# =========================================================================
+
+@test "podman adds host.containers.internal" {
+    run_ccc_dry_with_runtime podman
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "host.containers.internal:host-gateway" ]]
+}
+
+@test "docker adds host.docker.internal" {
+    run_ccc_dry_with_runtime docker
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "host.docker.internal:host-gateway" ]]
+}
+
+# =========================================================================
 # OAuth port forwarding
 # =========================================================================
 

@@ -179,9 +179,24 @@ rm -rf ~/.config/cclaude/claude-home
 cclaude    # re-copies from host ~/.claude/
 ```
 
+### Host Network Access
+
+The container can access services running on the host (e.g., local LLM API endpoints). Use the following hostnames inside the container:
+
+| Runtime | Hostname |
+|---------|----------|
+| Podman | `host.containers.internal` |
+| Docker | `host.docker.internal` |
+
+Example: if a local LLM API runs on `localhost:8080`, access it from inside the container as `http://host.containers.internal:8080` (Podman) or `http://host.docker.internal:8080` (Docker).
+
 ### SSH Agent Forwarding
 
-On Linux, if `SSH_AUTH_SOCK` is set, the SSH agent socket is forwarded into the container for `git clone` / `git push` over SSH. On macOS, this is not supported (launchd sockets cannot be mounted into the container VM).
+**Linux**: If `SSH_AUTH_SOCK` is set, the SSH agent socket is forwarded into the container automatically.
+
+**macOS with 1Password SSH agent**: `cclaude` automatically detects the 1Password SSH agent socket (`~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock`). Docker Desktop can mount it directly. For Podman Machine, the socket must be manually forwarded into the VM (see [Podman Machine SSH forwarding](https://docs.podman.io/en/latest/markdown/podman-machine.1.html)).
+
+**macOS with default ssh-agent**: The default launchd-managed `SSH_AUTH_SOCK` cannot be mounted into container VMs. Use 1Password SSH agent or configure key-based auth inside the container instead.
 
 ---
 

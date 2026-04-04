@@ -187,6 +187,53 @@ SETTINGS
 }
 
 # ---------------------------------------------------------------------------
+# SSH agent forwarding
+# ---------------------------------------------------------------------------
+
+# Detect and configure SSH agent socket for the container.
+# Supports: 1Password SSH agent, standard ssh-agent.
+# On macOS, only 1Password (or other file-based) sockets work; the default
+# launchd-managed SSH_AUTH_SOCK cannot be mounted into container VMs.
+
+OP_SSH_SOCK="${HOME}/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
+
+# Print SSH agent mount args to stdout (one per line), to be consumed by caller.
+# Returns nothing if no agent is available.
+get_ssh_agent_args() {
+    local runtime="$1"
+
+    # 1. Try 1Password SSH agent (macOS)
+    if [[ -S "$OP_SSH_SOCK" ]]; then
+        if [[ "$runtime" == "docker" ]]; then
+            # Docker Desktop can mount macOS sockets via gRPC forwarding
+            printf '%s\n' "-v" "${OP_SSH_SOCK}:/ssh-agent" "-e" "SSH_AUTH_SOCK=/ssh-agent"
+        else
+            # Podman Machine: socket must be forwarded into VM first.
+            if podman machine ssh -- test -e /ssh-agent 2>/dev/null; then
+                printf '%s\n' "-v" "/ssh-agent:/ssh-agent" "-e" "SSH_AUTH_SOCK=/ssh-agent"
+            else
+                warn "1Password SSH agent detected but not forwarded into Podman Machine."
+                warn "See README for Podman Machine SSH agent setup."
+            fi
+        fi
+        return
+    fi
+
+    # 2. Standard SSH_AUTH_SOCK (Linux only — macOS launchd sockets cannot be mounted)
+    if [[ -n "${SSH_AUTH_SOCK:-}" && "$(uname -s)" != "Darwin" ]]; then
+        printf '%s\n' "-v" "${SSH_AUTH_SOCK}:/ssh-agent" "-e" "SSH_AUTH_SOCK=/ssh-agent"
+    fi
+}
+
+setup_ssh_agent() {
+    local runtime="$1"
+    local arg
+    while IFS= read -r arg; do
+        run_args+=("$arg")
+    done < <(get_ssh_agent_args "$runtime")
+}
+
+# ---------------------------------------------------------------------------
 # Run Claude Code in container
 # ---------------------------------------------------------------------------
 
@@ -239,14 +286,15 @@ run_claude() {
         run_args+=(-e "GIT_AUTHOR_EMAIL=${git_email}" -e "GIT_COMMITTER_EMAIL=${git_email}")
     fi
 
-    # SSH agent forwarding (skip on macOS — launchd sockets cannot be mounted into VMs)
-    if [[ -n "${SSH_AUTH_SOCK:-}" && "$(uname -s)" != "Darwin" ]]; then
-        run_args+=(-v "${SSH_AUTH_SOCK}:/ssh-agent" -e "SSH_AUTH_SOCK=/ssh-agent")
-    fi
+    # SSH agent forwarding
+    setup_ssh_agent "$runtime"
 
-    # Podman SELinux label
+    # Host network access (e.g., local LLM API endpoints)
     if [[ "$runtime" == "podman" ]]; then
+        run_args+=(--add-host "host.containers.internal:host-gateway")
         run_args+=(--security-opt "label=disable")
+    else
+        run_args+=(--add-host "host.docker.internal:host-gateway")
     fi
 
     if [[ "${CCC_DRY_RUN:-}" == "1" ]]; then
