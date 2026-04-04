@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [0.2.1] - 2026-04-04
+
+### Fixed
+
+- Randomize SSH port (49152–65535) instead of fixed 2222 to avoid conflicts and improve security.
+- Warn when Dockerfile is newer than the built image, prompting `cclaude --build`.
+- Copy `~/.claude.json` (session/auth state) into container Claude home to prevent fresh setup on every launch.
+- Clean up leftover containers from interrupted sessions before starting.
+- Remove hardcoded OAuth port range (19400–19499) that conflicted with Podman Machine's gvproxy.
+- Use `--no-cache` for `cclaude --build` to ensure Dockerfile changes are always applied.
+- Fix Bash version requirement in README: 4+ → 3.2+ (matches actual compatibility).
+- Add security notes for `--ssh` mode and Docker file ownership workaround to README.
+
 ## [0.2.0] - 2026-04-04
 
 ### Added
@@ -52,5 +65,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - BATS test suite (24 tests) and shellcheck-clean.
 
 
+[0.2.1]: https://github.com/nlink-jp/cclaude/releases/tag/v0.2.1
 [0.2.0]: https://github.com/nlink-jp/cclaude/releases/tag/v0.2.0
 [0.1.0]: https://github.com/nlink-jp/cclaude/releases/tag/v0.1.0
