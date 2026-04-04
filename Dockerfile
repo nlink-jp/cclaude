@@ -40,6 +40,12 @@ ENV PATH="/root/.local/bin:${PATH}"
 # ---- Claude Code ----
 RUN npm install -g @anthropic-ai/claude-code
 
+# ---- GitHub CLI ----
+RUN ARCH="$(dpkg --print-architecture)" \
+    && GH_VER="$(curl -fsSL https://api.github.com/repos/cli/cli/releases/latest | jq -r '.tag_name | ltrimstr("v")')" \
+    && curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VER}/gh_${GH_VER}_linux_${ARCH}.tar.gz" \
+       | tar -xz --strip-components=1 -C /usr/local
+
 # ---- golangci-lint ----
 RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh \
     | sh -s -- -b /usr/local/bin
