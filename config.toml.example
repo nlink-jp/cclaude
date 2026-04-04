@@ -14,6 +14,12 @@ runtime = "auto"
 # Override: CCC_IMAGE
 image = "cclaude:latest"
 
+# Default run mode: "direct" or "ssh"
+#   direct — exec into container (fast, SSH agent on Linux only)
+#   ssh    — connect via sshd with agent forwarding (all platforms)
+# Override: CCC_MODE or --ssh flag
+mode = "direct"
+
 [toolchain]
 # Toolchain versions used when building the image (cclaude --build).
 # Override: CCC_GO_VERSION, CCC_NODE_VERSION

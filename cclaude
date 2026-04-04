@@ -551,6 +551,7 @@ cclaude v${CCC_VERSION}
 [resolved]
 runtime            = ${runtime}
 image              = ${image}
+mode               = $(resolve CCC_MODE container mode direct)
 host_claude_home   = ${host_claude_home}
 container_home     = ${CCC_CONTAINER_CLAUDE_HOME}
 config_file        = ${CCC_CONFIG_FILE}
@@ -659,15 +660,25 @@ main() {
             ;;
         --)
             shift
-            run_claude "$@"
+            run_default "$@"
             ;;
         --*)
             die "Unknown option: $1. Use --help for usage."
             ;;
         *)
-            run_claude "$@"
+            run_default "$@"
             ;;
     esac
+}
+
+run_default() {
+    local mode
+    mode="$(resolve CCC_MODE container mode direct)"
+    if [[ "$mode" == "ssh" ]]; then
+        run_claude_ssh "$@"
+    else
+        run_claude "$@"
+    fi
 }
 
 main "$@"
