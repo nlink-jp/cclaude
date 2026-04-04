@@ -1,0 +1,14 @@
+# cclaude — npm security hardening
+# Copy to ~/.config/cclaude/npmrc to override the container's default .npmrc
+#
+# Supply chain attack mitigations:
+#   engine-strict   — reject packages requiring incompatible Node versions
+#   ignore-scripts  — block install/postinstall scripts (major attack vector)
+#   audit           — check for known vulnerabilities on install
+#
+# Optional: use a security-auditing registry proxy
+#   registry=https://npm.flatt.tech
+
+engine-strict=true
+ignore-scripts=true
+audit=true

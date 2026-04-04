@@ -60,6 +60,13 @@ RUN mkdir -p /run/sshd \
     && sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config \
     && mkdir -p /root/.ssh && chmod 700 /root/.ssh
 
+# ---- npm security hardening ----
+RUN printf '%s\n' \
+    'engine-strict=true' \
+    'ignore-scripts=true' \
+    'audit=true' \
+    > /root/.npmrc
+
 # ---- Container defaults ----
 # Allow any mounted git repo
 RUN git config --global --add safe.directory '*'

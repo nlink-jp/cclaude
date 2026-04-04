@@ -42,3 +42,8 @@ node_version = "20"
 # Claude Code home directory to persist across sessions
 # Override: CCC_CLAUDE_HOME
 claude_home = "~/.claude"
+
+# [security]
+# Custom .npmrc is mounted from ~/.config/cclaude/npmrc (if present).
+# Edit that file to configure registry, ignore-scripts, audit, etc.
+# See npmrc.example for supply chain hardening options.

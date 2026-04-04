@@ -13,6 +13,7 @@ build:
 	sed -i'' -e 's/^CCC_VERSION=".*"/CCC_VERSION="$(VERSION)"/' dist/$(BINARY)
 	cp Dockerfile dist/
 	cp config.toml.example dist/
+	cp npmrc.example dist/
 
 ## install: Install to $(DESTDIR)$(PREFIX)/bin and config dir
 ##   Examples:
@@ -26,6 +27,8 @@ install: build
 	install -m 644 dist/Dockerfile $(HOME)/.config/cclaude/Dockerfile
 	@test -f $(HOME)/.config/cclaude/config.toml || \
 		install -m 644 dist/config.toml.example $(HOME)/.config/cclaude/config.toml
+	@test -f $(HOME)/.config/cclaude/npmrc || \
+		install -m 644 dist/npmrc.example $(HOME)/.config/cclaude/npmrc
 	@printf 'Installed %s to %s%s/bin/%s\n' "$(BINARY)" "$(DESTDIR)" "$(PREFIX)" "$(BINARY)"
 	@printf 'Dockerfile: %s/.config/cclaude/Dockerfile\n' "$(HOME)"
 

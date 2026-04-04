@@ -215,6 +215,7 @@ ensure_image() {
 
 CCC_CONTAINER_CLAUDE_HOME="${CCC_CONFIG_DIR}/claude-home"
 CCC_CONTAINER_CLAUDE_JSON="${CCC_CONFIG_DIR}/claude.json"
+CCC_CONTAINER_NPMRC="${CCC_CONFIG_DIR}/npmrc"
 
 prepare_claude_home() {
     local host_claude_home="$1"
@@ -261,6 +262,13 @@ setup_ssh_agent_mount() {
     fi
     if [[ -n "${SSH_AUTH_SOCK:-}" ]]; then
         run_args+=(-v "${SSH_AUTH_SOCK}:/ssh-agent" -e "SSH_AUTH_SOCK=/ssh-agent")
+    fi
+}
+
+# Mount custom .npmrc if present in config dir
+setup_npmrc() {
+    if [[ -f "$CCC_CONTAINER_NPMRC" ]]; then
+        run_args+=(-v "${CCC_CONTAINER_NPMRC}:/root/.npmrc:ro")
     fi
 }
 
@@ -321,6 +329,9 @@ run_claude_ssh() {
     if [[ -n "$git_email" ]]; then
         run_args+=(-e "GIT_AUTHOR_EMAIL=${git_email}" -e "GIT_COMMITTER_EMAIL=${git_email}")
     fi
+
+    # Custom .npmrc (supply chain hardening)
+    setup_npmrc
 
     # Host network access
     local host_gw
@@ -490,6 +501,9 @@ run_claude() {
     # SSH agent forwarding (socket mount — Linux only)
     setup_ssh_agent_mount "$runtime"
 
+    # Custom .npmrc (supply chain hardening)
+    setup_npmrc
+
     # Host network access
     local host_gw
     if [[ "$runtime" == "podman" ]]; then
@@ -571,6 +585,8 @@ run_shell() {
     if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
         run_args+=(-e "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}")
     fi
+
+    setup_npmrc
 
     if [[ "$runtime" == "podman" ]]; then
         run_args+=(--security-opt "label=disable")
