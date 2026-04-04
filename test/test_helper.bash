@@ -3,6 +3,9 @@
 # Path to the cclaude script under test
 CCC_BIN="${BATS_TEST_DIRNAME}/../cclaude"
 
+# Isolate tests from user's config file
+export CCC_CONFIG_FILE="/dev/null"
+
 # Run cclaude in dry-run mode with controlled environment
 run_ccc_dry() {
     CCC_DRY_RUN=1 run "$CCC_BIN" "$@"

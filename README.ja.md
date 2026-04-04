@@ -20,6 +20,7 @@ Claude Code の状態（`~/.claude`）はホスト上に永続化されます。
 
 - [Podman](https://podman.io/) または [Docker](https://www.docker.com/)
 - Bash 3.2+
+- コンテナ VM メモリ 8GB 以上（イメージビルド時）。Podman Machine: `podman machine set --memory 8192`
 
 ### ソースからインストール
 

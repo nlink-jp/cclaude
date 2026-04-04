@@ -39,8 +39,9 @@ RUN curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" | bash - \
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:${PATH}"
 
-# ---- Claude Code (native installer — npm is deprecated) ----
-# Installs to ~/.local/bin/claude (already in PATH from uv step)
+# ---- Claude Code (native installer) ----
+# Requires sufficient memory in the container VM (>=8GB recommended).
+# Installs to ~/.local/bin/claude (already in PATH from uv step).
 RUN curl -fsSL https://claude.ai/install.sh | bash
 
 # ---- GitHub CLI ----

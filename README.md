@@ -22,6 +22,7 @@
 
 - [Podman](https://podman.io/) or [Docker](https://www.docker.com/)
 - Bash 3.2+
+- Container VM with 8GB+ memory (for image build). For Podman Machine: `podman machine set --memory 8192`
 
 ### Install from source
 

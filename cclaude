@@ -6,7 +6,7 @@ set -euo pipefail
 CCC_VERSION="0.1.0"
 CCC_DEFAULT_IMAGE="cclaude:latest"
 CCC_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cclaude"
-CCC_CONFIG_FILE="${CCC_CONFIG_DIR}/config.toml"
+CCC_CONFIG_FILE="${CCC_CONFIG_FILE:-${CCC_CONFIG_DIR}/config.toml}"
 
 # ---------------------------------------------------------------------------
 # Utilities
