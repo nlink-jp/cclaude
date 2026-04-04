@@ -147,20 +147,34 @@ claude_home = "~/.claude"
 Claude Code はプロジェクトメモリを絶対パスベースで保存します（例: `~/.claude/projects/-Users-user-my-project/`）。
 同じパスを使用することで、ホストとコンテナ間でプロジェクトメモリの完全な互換性が維持されます。
 
-### 永続化される状態
+### コンテナ専用の Claude ホーム
 
-ホストの `~/.claude/` がコンテナ内の `/root/.claude` にバインドマウントされます:
+コンテナはホストとは独立した Claude Code 状態のコピーを使用します:
 
-- `settings.json` — パーミッションとプラグイン設定
-- `projects/` — プロジェクト固有のメモリと会話成果物
-- `history.jsonl` — 会話履歴
-- `plugins/` — LSP サーバーとスキル
-- OAuth トークン — サブスクリプション認証状態
+```
+ホスト:    ~/.claude/                          （ホスト設定 — 変更されない）
+コンテナ:  ~/.config/cclaude/claude-home/      （コンテナ専用コピー）
+```
+
+初回起動時に `cclaude` はホストの `~/.claude/` を `~/.config/cclaude/claude-home/` にコピーします。
+以降はコンテナ用コピーが独立して使用されます。この設計により:
+
+- **ホスト設定は変更されない** — ホスト側のサンドボックス、パーミッション、プラグイン設定はそのまま維持されます。
+- **コンテナは独自の設定を持つ** — サンドボックスは自動的に無効化され（コンテナ自体が隔離を提供）、パーミッションも独立して変更可能です。
+- **コンテナ再起動後も状態が保持される** — プロジェクトメモリ、会話履歴、OAuth トークン、プラグインはコンテナ用コピーに保持されます。
+
+ホスト設定と再同期する場合（ホスト側でパーミッションを変更した後など）は、コンテナ用コピーを削除すると次回起動時に再作成されます:
+
+```bash
+rm -rf ~/.config/cclaude/claude-home
+cclaude    # ホストの ~/.claude/ から再コピー
+```
 
 ### SSH エージェント転送
 
-ホストで `SSH_AUTH_SOCK` が設定されている場合、SSH エージェントソケットがコンテナに転送されます。
-コンテナ内での `git clone` / `git push`（SSH 経由）が可能になります。
+Linux では `SSH_AUTH_SOCK` が設定されている場合、SSH エージェントソケットがコンテナに転送され、
+`git clone` / `git push`（SSH 経由）が可能になります。
+macOS では launchd ソケットをコンテナ VM にマウントできないため、この機能は無効です。
 
 ## イメージのカスタマイズ
 
@@ -186,7 +200,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 ```
 
-## ビルド
+## 開発
+
+### 前提ツール
+
+- [ShellCheck](https://www.shellcheck.net/) — bash スクリプトの静的解析
+- [bats-core](https://github.com/bats-core/bats-core) — テストフレームワーク
+
+```bash
+# macOS
+brew install shellcheck bats-core
+
+# Debian/Ubuntu
+apt install shellcheck bats
+```
+
+### Make ターゲット
 
 ```bash
 make build        # スクリプト + アセットを dist/ にコピー

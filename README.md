@@ -157,19 +157,31 @@ Container: /home/user/my-project  (identical)
 
 Claude Code stores project memory keyed by absolute path (e.g., `~/.claude/projects/-home-user-my-project/`). By using the same path, project memory is fully compatible between host and container sessions.
 
-### Persisted State
+### Container-Specific Claude Home
 
-`~/.claude/` on the host is bind-mounted to `/root/.claude` in the container. This persists:
+The container uses its own copy of the Claude Code state, separate from the host:
 
-- `settings.json` — permissions and plugin configuration
-- `projects/` — project-specific memory and conversation artifacts
-- `history.jsonl` — conversation history
-- `plugins/` — LSP servers and skills
-- OAuth tokens — subscription authentication state
+```
+Host:      ~/.claude/                          (host settings — untouched)
+Container: ~/.config/cclaude/claude-home/      (container-specific copy)
+```
+
+On first run, `cclaude` copies the host's `~/.claude/` to `~/.config/cclaude/claude-home/`. After that, the container copy is used independently. This design ensures:
+
+- **Host settings are never modified** — sandbox, permissions, and plugin configuration on the host remain unchanged.
+- **Container has its own settings** — sandbox is automatically disabled (the container itself provides isolation), and you can customize permissions independently.
+- **State persists across container restarts** — project memory, conversation history, OAuth tokens, and plugins are retained in the container copy.
+
+To re-sync with host settings (e.g., after changing host permissions), delete the container copy and it will be recreated on next run:
+
+```bash
+rm -rf ~/.config/cclaude/claude-home
+cclaude    # re-copies from host ~/.claude/
+```
 
 ### SSH Agent Forwarding
 
-If `SSH_AUTH_SOCK` is set on the host, the SSH agent socket is forwarded into the container. This allows `git clone` / `git push` over SSH inside the container.
+On Linux, if `SSH_AUTH_SOCK` is set, the SSH agent socket is forwarded into the container for `git clone` / `git push` over SSH. On macOS, this is not supported (launchd sockets cannot be mounted into the container VM).
 
 ---
 
@@ -199,7 +211,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 ---
 
-## Building
+## Development
+
+### Prerequisites
+
+- [ShellCheck](https://www.shellcheck.net/) — static analysis for the bash script
+- [bats-core](https://github.com/bats-core/bats-core) — test framework
+
+```bash
+# macOS
+brew install shellcheck bats-core
+
+# Debian/Ubuntu
+apt install shellcheck bats
+```
+
+### Make targets
 
 ```bash
 make build        # copy script + assets to dist/

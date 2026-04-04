@@ -155,13 +155,34 @@ ensure_image() {
 }
 
 # ---------------------------------------------------------------------------
-# Ensure ~/.claude directory exists
+# Prepare container-specific Claude home
 # ---------------------------------------------------------------------------
 
-ensure_claude_home() {
-    local claude_home="$1"
-    if [[ ! -d "$claude_home" ]]; then
-        mkdir -p "$claude_home"
+# Container uses its own copy of ~/.claude so that settings (sandbox, etc.)
+# can differ from the host.  On first run the host's Claude home is copied;
+# after that the container copy is reused as-is.
+
+CCC_CONTAINER_CLAUDE_HOME="${CCC_CONFIG_DIR}/claude-home"
+
+prepare_claude_home() {
+    local host_claude_home="$1"
+
+    if [[ ! -d "$CCC_CONTAINER_CLAUDE_HOME" ]]; then
+        if [[ -d "$host_claude_home" ]]; then
+            printf 'cclaude: initializing container Claude home from %s ...\n' "$host_claude_home" >&2
+            cp -a "$host_claude_home" "$CCC_CONTAINER_CLAUDE_HOME"
+        else
+            mkdir -p "$CCC_CONTAINER_CLAUDE_HOME"
+        fi
+        # Disable sandbox — the container itself provides isolation
+        cat > "${CCC_CONTAINER_CLAUDE_HOME}/settings.local.json" <<'SETTINGS'
+{
+  "sandbox": {
+    "enabled": false
+  }
+}
+SETTINGS
+        printf 'cclaude: sandbox disabled in container settings.\n' >&2
     fi
 }
 
@@ -170,17 +191,17 @@ ensure_claude_home() {
 # ---------------------------------------------------------------------------
 
 run_claude() {
-    local runtime image claude_home project_dir
+    local runtime image host_claude_home project_dir
     runtime="$(detect_runtime)"
     image="$(resolve CCC_IMAGE container image "$CCC_DEFAULT_IMAGE")"
-    claude_home="$(resolve CCC_CLAUDE_HOME paths claude_home "$HOME/.claude")"
+    host_claude_home="$(resolve CCC_CLAUDE_HOME paths claude_home "$HOME/.claude")"
     # Expand ~ if present
-    claude_home="${claude_home/#\~/$HOME}"
+    host_claude_home="${host_claude_home/#\~/$HOME}"
     project_dir="$(pwd)"
 
     if [[ "${CCC_DRY_RUN:-}" != "1" ]]; then
         ensure_image "$runtime" "$image"
-        ensure_claude_home "$claude_home"
+        prepare_claude_home "$host_claude_home"
     fi
 
     # Verify TTY
@@ -194,8 +215,8 @@ run_claude() {
         # Mount project at same absolute path for memory compatibility
         -v "${project_dir}:${project_dir}"
         -w "${project_dir}"
-        # Persist Claude Code state (includes OAuth tokens for subscription auth)
-        -v "${claude_home}:/root/.claude"
+        # Container-specific Claude home (copied from host on first run)
+        -v "${CCC_CONTAINER_CLAUDE_HOME}:/root/.claude"
         # Expose port range for OAuth callback (Claude Code uses a local HTTP server)
         -p "127.0.0.1:19400-19499:19400-19499"
         # Terminal
@@ -228,30 +249,10 @@ run_claude() {
         run_args+=(--security-opt "label=disable")
     fi
 
-    # Build the in-container command.
-    # Disable sandbox via settings.local.json (container provides isolation),
-    # then restore the original file on exit to avoid polluting host state.
-    # shellcheck disable=SC2016
-    local -a container_cmd=(
-        bash -c '
-SL=/root/.claude/settings.local.json
-BAK=""
-if [ -f "$SL" ]; then BAK=$(cat "$SL"); fi
-cat > "$SL" <<EOSETTINGS
-{
-  "sandbox": { "enabled": false }
-}
-EOSETTINGS
-trap '"'"'if [ -n "$BAK" ]; then printf "%s" "$BAK" > "$SL"; else rm -f "$SL"; fi'"'"' EXIT
-exec claude "$@"
-' -- "$@"
-    )
-
     if [[ "${CCC_DRY_RUN:-}" == "1" ]]; then
         printf '%s' "$runtime"
         printf ' %s' "${run_args[@]}"
-        printf ' %s' "$image"
-        printf ' claude'
+        printf ' %s claude' "$image"
         for arg in "$@"; do
             printf ' %s' "$arg"
         done
@@ -259,7 +260,7 @@ exec claude "$@"
         return 0
     fi
 
-    exec "$runtime" "${run_args[@]}" "$image" "${container_cmd[@]}"
+    exec "$runtime" "${run_args[@]}" "$image" claude "$@"
 }
 
 # ---------------------------------------------------------------------------
@@ -267,16 +268,16 @@ exec claude "$@"
 # ---------------------------------------------------------------------------
 
 run_shell() {
-    local runtime image claude_home project_dir
+    local runtime image host_claude_home project_dir
     runtime="$(detect_runtime)"
     image="$(resolve CCC_IMAGE container image "$CCC_DEFAULT_IMAGE")"
-    claude_home="$(resolve CCC_CLAUDE_HOME paths claude_home "$HOME/.claude")"
-    claude_home="${claude_home/#\~/$HOME}"
+    host_claude_home="$(resolve CCC_CLAUDE_HOME paths claude_home "$HOME/.claude")"
+    host_claude_home="${host_claude_home/#\~/$HOME}"
     project_dir="$(pwd)"
 
     if [[ "${CCC_DRY_RUN:-}" != "1" ]]; then
         ensure_image "$runtime" "$image"
-        ensure_claude_home "$claude_home"
+        prepare_claude_home "$host_claude_home"
     fi
 
     local -a run_args=(
@@ -284,7 +285,7 @@ run_shell() {
         --hostname cclaude
         -v "${project_dir}:${project_dir}"
         -w "${project_dir}"
-        -v "${claude_home}:/root/.claude"
+        -v "${CCC_CONTAINER_CLAUDE_HOME}:/root/.claude"
         -e "TERM=${TERM:-xterm-256color}"
     )
 
@@ -311,21 +312,22 @@ run_shell() {
 # ---------------------------------------------------------------------------
 
 show_config() {
-    local runtime image claude_home
+    local runtime image host_claude_home
     runtime="$(detect_runtime)"
     image="$(resolve CCC_IMAGE container image "$CCC_DEFAULT_IMAGE")"
-    claude_home="$(resolve CCC_CLAUDE_HOME paths claude_home "$HOME/.claude")"
-    claude_home="${claude_home/#\~/$HOME}"
+    host_claude_home="$(resolve CCC_CLAUDE_HOME paths claude_home "$HOME/.claude")"
+    host_claude_home="${host_claude_home/#\~/$HOME}"
 
     cat <<EOF
 cclaude v${CCC_VERSION}
 
 [resolved]
-runtime       = ${runtime}
-image         = ${image}
-claude_home   = ${claude_home}
-config_file   = ${CCC_CONFIG_FILE}
-project_dir   = $(pwd)
+runtime            = ${runtime}
+image              = ${image}
+host_claude_home   = ${host_claude_home}
+container_home     = ${CCC_CONTAINER_CLAUDE_HOME}
+config_file        = ${CCC_CONFIG_FILE}
+project_dir        = $(pwd)
 
 [toolchain] (used at image build time)
 go_version    = $(resolve CCC_GO_VERSION toolchain go_version 1.23.4)

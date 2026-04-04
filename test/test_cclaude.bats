@@ -78,7 +78,7 @@ image = "from-config:v1"'
 @test "missing config file uses defaults" {
     CCC_CONFIG_FILE="/nonexistent/config.toml" CCC_DRY_RUN=1 CCC_RUNTIME=podman run "$CCC_BIN" --config
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "image         = cclaude:latest" ]]
+    [[ "$output" =~ "image" ]] && [[ "$output" =~ "cclaude:latest" ]]
 }
 
 # =========================================================================
@@ -94,16 +94,11 @@ image = "from-config:v1"'
     [[ "$output" =~ "-w ${cwd}" ]]
 }
 
-@test "claude home mounted to /root/.claude" {
+@test "container claude home mounted to /root/.claude" {
     run_ccc_dry_with_runtime podman
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "-v ${HOME}/.claude:/root/.claude" ]]
-}
-
-@test "CCC_CLAUDE_HOME overrides default claude home" {
-    CCC_CLAUDE_HOME="/tmp/test-claude" CCC_DRY_RUN=1 CCC_RUNTIME=podman run "$CCC_BIN"
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "-v /tmp/test-claude:/root/.claude" ]]
+    # Container uses its own copy at ~/.config/cclaude/claude-home
+    [[ "$output" =~ "cclaude/claude-home:/root/.claude" ]]
 }
 
 # =========================================================================
