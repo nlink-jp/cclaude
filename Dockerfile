@@ -29,7 +29,7 @@ RUN ARCH="$(dpkg --print-architecture)" \
        | tar -C /usr/local -xz
 ENV PATH="/usr/local/go/bin:/root/go/bin:${PATH}"
 
-# ---- Node.js (required by Claude Code) ----
+# ---- Node.js (for user projects) ----
 ARG NODE_VERSION=20
 RUN curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" | bash - \
     && apt-get install -y --no-install-recommends nodejs \
@@ -39,8 +39,9 @@ RUN curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" | bash - \
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:${PATH}"
 
-# ---- Claude Code ----
-RUN npm install -g @anthropic-ai/claude-code
+# ---- Claude Code (native installer — npm is deprecated) ----
+# Installs to ~/.local/bin/claude (already in PATH from uv step)
+RUN curl -fsSL https://claude.ai/install.sh | bash
 
 # ---- GitHub CLI ----
 RUN ARCH="$(dpkg --print-architecture)" \
