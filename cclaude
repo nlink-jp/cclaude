@@ -201,6 +201,7 @@ ensure_image() {
 # after that the container copy is reused as-is.
 
 CCC_CONTAINER_CLAUDE_HOME="${CCC_CONFIG_DIR}/claude-home"
+CCC_CONTAINER_CLAUDE_JSON="${CCC_CONFIG_DIR}/claude.json"
 
 prepare_claude_home() {
     local host_claude_home="$1"
@@ -221,6 +222,16 @@ prepare_claude_home() {
 }
 SETTINGS
         printf 'cclaude: sandbox disabled in container settings.\n' >&2
+    fi
+
+    # Copy ~/.claude.json (session/auth state) on first run
+    if [[ ! -f "$CCC_CONTAINER_CLAUDE_JSON" ]]; then
+        local host_claude_json="${HOME}/.claude.json"
+        if [[ -f "$host_claude_json" ]]; then
+            cp -a "$host_claude_json" "$CCC_CONTAINER_CLAUDE_JSON"
+        else
+            printf '{}' > "$CCC_CONTAINER_CLAUDE_JSON"
+        fi
     fi
 }
 
@@ -276,6 +287,7 @@ run_claude_ssh() {
         -v "${project_dir}:${project_dir}"
         -w "${project_dir}"
         -v "${CCC_CONTAINER_CLAUDE_HOME}:/root/.claude"
+        -v "${CCC_CONTAINER_CLAUDE_JSON}:/root/.claude.json"
         -p "127.0.0.1:${CCC_SSH_PORT}:22"
         -p "127.0.0.1:19400-19499:19400-19499"
         -e "TERM=${TERM:-xterm-256color}"
@@ -411,6 +423,7 @@ run_claude() {
         -w "${project_dir}"
         # Container-specific Claude home (copied from host on first run)
         -v "${CCC_CONTAINER_CLAUDE_HOME}:/root/.claude"
+        -v "${CCC_CONTAINER_CLAUDE_JSON}:/root/.claude.json"
         # Expose port range for OAuth callback (Claude Code uses a local HTTP server)
         -p "127.0.0.1:19400-19499:19400-19499"
         # Terminal
@@ -510,6 +523,7 @@ run_shell() {
         -v "${project_dir}:${project_dir}"
         -w "${project_dir}"
         -v "${CCC_CONTAINER_CLAUDE_HOME}:/root/.claude"
+        -v "${CCC_CONTAINER_CLAUDE_JSON}:/root/.claude.json"
         -e "TERM=${TERM:-xterm-256color}"
     )
 
