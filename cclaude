@@ -228,10 +228,30 @@ run_claude() {
         run_args+=(--security-opt "label=disable")
     fi
 
+    # Build the in-container command.
+    # Disable sandbox via settings.local.json (container provides isolation),
+    # then restore the original file on exit to avoid polluting host state.
+    # shellcheck disable=SC2016
+    local -a container_cmd=(
+        bash -c '
+SL=/root/.claude/settings.local.json
+BAK=""
+if [ -f "$SL" ]; then BAK=$(cat "$SL"); fi
+cat > "$SL" <<EOSETTINGS
+{
+  "sandbox": { "enabled": false }
+}
+EOSETTINGS
+trap '"'"'if [ -n "$BAK" ]; then printf "%s" "$BAK" > "$SL"; else rm -f "$SL"; fi'"'"' EXIT
+exec claude "$@"
+' -- "$@"
+    )
+
     if [[ "${CCC_DRY_RUN:-}" == "1" ]]; then
         printf '%s' "$runtime"
         printf ' %s' "${run_args[@]}"
-        printf ' %s claude' "$image"
+        printf ' %s' "$image"
+        printf ' claude'
         for arg in "$@"; do
             printf ' %s' "$arg"
         done
@@ -239,7 +259,7 @@ run_claude() {
         return 0
     fi
 
-    exec "$runtime" "${run_args[@]}" "$image" claude "$@"
+    exec "$runtime" "${run_args[@]}" "$image" "${container_cmd[@]}"
 }
 
 # ---------------------------------------------------------------------------
