@@ -270,7 +270,7 @@ setup_ssh_agent_mount() {
 
 # Use a random high port to avoid conflicts and reduce exposure
 CCC_SSH_PORT="${CCC_SSH_PORT:-$((49152 + RANDOM % 16384))}"
-CCC_CONTAINER_NAME="cclaude-ssh"
+CCC_CONTAINER_NAME="cclaude-ssh-$$"
 
 run_claude_ssh() {
     local runtime image host_claude_home project_dir
@@ -382,8 +382,19 @@ run_claude_ssh() {
     }
     trap cleanup_ssh_container EXIT INT TERM
 
-    # Stop any leftover container from a previous session
-    "$runtime" stop "${CCC_CONTAINER_NAME}" &>/dev/null || true
+    # Stop orphaned cclaude-ssh containers from previous interrupted sessions.
+    # Only stops containers that are no longer attached to a running cclaude process.
+    local orphan
+    for orphan in $("$runtime" ps -q --filter "name=cclaude-ssh-" 2>/dev/null); do
+        local orphan_name
+        orphan_name="$("$runtime" inspect --format '{{.Name}}' "$orphan" 2>/dev/null)" || continue
+        # Extract PID from container name (cclaude-ssh-<PID>)
+        local orphan_pid="${orphan_name##*-}"
+        # If the parent process is no longer running, this is an orphan
+        if ! kill -0 "$orphan_pid" 2>/dev/null; then
+            "$runtime" stop "$orphan" &>/dev/null || true
+        fi
+    done
 
     # Start container with sshd
     local start_err
