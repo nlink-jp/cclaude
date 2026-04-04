@@ -421,7 +421,9 @@ run_claude_ssh() {
         sleep 0.2
     done
 
-    # Connect with agent forwarding and run claude
+    # Connect with agent forwarding and run claude.
+    # Ignore ssh exit code — Claude Code may exit non-zero (e.g., Ctrl+D),
+    # and we always want cleanup to proceed normally.
     ssh -A -t \
         -i "$ssh_key" \
         -p "$CCC_SSH_PORT" \
@@ -429,7 +431,8 @@ run_claude_ssh() {
         -o UserKnownHostsFile=/dev/null \
         -o LogLevel=ERROR \
         root@127.0.0.1 \
-        "cd '${project_dir}' && claude $*"
+        "cd '${project_dir}' && claude $*" \
+        || true
 }
 
 # ---------------------------------------------------------------------------
