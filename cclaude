@@ -260,24 +260,13 @@ run_claude_ssh() {
         prepare_claude_home "$host_claude_home"
     fi
 
-    # Prepare host public key for container auth
+    # Generate ephemeral SSH key pair (created per session, destroyed on exit)
+    local ssh_key=""
     local pubkey="DRY_RUN_PLACEHOLDER"
     if [[ "${CCC_DRY_RUN:-}" != "1" ]]; then
-        pubkey=""
-        local key_candidates=(
-            "${HOME}/.ssh/id_ed25519.pub"
-            "${HOME}/.ssh/id_rsa.pub"
-            "${HOME}/.ssh/id_ecdsa.pub"
-        )
-        for k in "${key_candidates[@]}"; do
-            if [[ -f "$k" ]]; then
-                pubkey="$(cat "$k")"
-                break
-            fi
-        done
-        if [[ -z "$pubkey" ]]; then
-            die "No SSH public key found in ~/.ssh/. Generate one with: ssh-keygen -t ed25519"
-        fi
+        ssh_key="$(mktemp -d)/cclaude_key"
+        ssh-keygen -t ed25519 -f "$ssh_key" -N "" -C "cclaude-ephemeral" -q
+        pubkey="$(cat "${ssh_key}.pub")"
     fi
 
     local -a run_args=(
@@ -354,9 +343,13 @@ run_claude_ssh() {
         return 0
     fi
 
-    # Clean up on exit
+    # Clean up on exit: stop container and remove ephemeral key
     cleanup_ssh_container() {
         "$runtime" stop "${CCC_CONTAINER_NAME}" &>/dev/null || true
+        if [[ -n "$ssh_key" ]]; then
+            rm -f "$ssh_key" "${ssh_key}.pub"
+            rmdir "$(dirname "$ssh_key")" 2>/dev/null || true
+        fi
     }
     trap cleanup_ssh_container EXIT
 
@@ -365,7 +358,10 @@ run_claude_ssh() {
 
     # Wait for sshd to be ready
     local retries=0
-    while ! ssh -q -p "$CCC_SSH_PORT" -o StrictHostKeyChecking=no -o BatchMode=yes root@127.0.0.1 true 2>/dev/null; do
+    while ! ssh -q -i "$ssh_key" -p "$CCC_SSH_PORT" \
+            -o StrictHostKeyChecking=no -o BatchMode=yes \
+            -o UserKnownHostsFile=/dev/null \
+            root@127.0.0.1 true 2>/dev/null; do
         retries=$((retries + 1))
         if [[ $retries -ge 30 ]]; then
             die "Timed out waiting for container sshd on port ${CCC_SSH_PORT}."
@@ -375,6 +371,7 @@ run_claude_ssh() {
 
     # Connect with agent forwarding and run claude
     ssh -A -t \
+        -i "$ssh_key" \
         -p "$CCC_SSH_PORT" \
         -o StrictHostKeyChecking=no \
         -o UserKnownHostsFile=/dev/null \
