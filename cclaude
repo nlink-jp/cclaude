@@ -194,11 +194,10 @@ ensure_image() {
     # Warn if Dockerfile is newer than the image
     local dockerfile
     dockerfile="$(locate_dockerfile 2>/dev/null)" || return
-    local img_created
-    img_created="$("$runtime" image inspect --format '{{.Created}}' "$image" 2>/dev/null)" || return
     local img_epoch df_epoch
-    img_epoch="$(date -j -f "%Y-%m-%d %H:%M:%S" "${img_created%.*}" "+%s" 2>/dev/null)" \
-        || img_epoch="$(date -d "${img_created%.*}" "+%s" 2>/dev/null)" || return
+    # Get image creation time as epoch (UTC)
+    img_epoch="$("$runtime" image inspect --format '{{.Created.Unix}}' "$image" 2>/dev/null)" \
+        || return
     df_epoch="$(stat -f "%m" "$dockerfile" 2>/dev/null)" \
         || df_epoch="$(stat -c "%Y" "$dockerfile" 2>/dev/null)" || return
     if [[ "$df_epoch" -gt "$img_epoch" ]]; then
