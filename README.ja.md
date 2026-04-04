@@ -219,11 +219,9 @@ publish_ports = [3000, 5173]
 
 ### SSH エージェント転送
 
-**Linux**: `SSH_AUTH_SOCK` が設定されている場合、SSH エージェントソケットが自動的にコンテナに転送されます。
+**Linux**: `SSH_AUTH_SOCK` が設定されている場合、SSH エージェントソケットが自動的にコンテナに転送されます。標準の ssh-agent と 1Password SSH エージェントの両方に対応しています。
 
-**macOS（1Password SSH エージェント）**: `cclaude` は 1Password SSH エージェントソケット（`~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock`）を自動検出します。Docker Desktop では直接マウント可能です。Podman Machine では VM へのソケット転送を手動で設定する必要があります（[Podman Machine SSH forwarding](https://docs.podman.io/en/latest/markdown/podman-machine.1.html) 参照）。
-
-**macOS（デフォルト ssh-agent）**: launchd が管理するデフォルトの `SSH_AUTH_SOCK` はコンテナ VM にマウントできません。1Password SSH エージェントを使用するか、コンテナ内で鍵ベースの認証を設定してください。
+**macOS**: Unix ドメインソケット（1Password、launchd ssh-agent とも）は Podman Machine / Docker Desktop が使用する VM 層（virtiofs）を通して転送できません。git 操作には HTTPS を使用するか、コンテナ内で個別に SSH 鍵を設定してください。
 
 ## イメージのカスタマイズ
 

@@ -228,11 +228,9 @@ Without port forwarding, host services are also available via runtime-specific h
 
 ### SSH Agent Forwarding
 
-**Linux**: If `SSH_AUTH_SOCK` is set, the SSH agent socket is forwarded into the container automatically.
+**Linux**: If `SSH_AUTH_SOCK` is set, the SSH agent socket is forwarded into the container automatically. This supports both standard ssh-agent and 1Password SSH agent.
 
-**macOS with 1Password SSH agent**: `cclaude` automatically detects the 1Password SSH agent socket (`~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock`). Docker Desktop can mount it directly. For Podman Machine, the socket must be manually forwarded into the VM (see [Podman Machine SSH forwarding](https://docs.podman.io/en/latest/markdown/podman-machine.1.html)).
-
-**macOS with default ssh-agent**: The default launchd-managed `SSH_AUTH_SOCK` cannot be mounted into container VMs. Use 1Password SSH agent or configure key-based auth inside the container instead.
+**macOS**: Unix domain sockets (including 1Password and launchd ssh-agent) cannot be forwarded through the VM layer (virtiofs) used by Podman Machine and Docker Desktop. Use HTTPS for git operations, or configure SSH keys inside the container separately.
 
 ---
 

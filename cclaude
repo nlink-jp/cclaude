@@ -233,32 +233,27 @@ SETTINGS
 # On macOS, only 1Password (or other file-based) sockets work; the default
 # launchd-managed SSH_AUTH_SOCK cannot be mounted into container VMs.
 
-OP_SSH_SOCK="${HOME}/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
-
 # Print SSH agent mount args to stdout (one per line), to be consumed by caller.
 # Returns nothing if no agent is available.
 get_ssh_agent_args() {
     local runtime="$1"
 
-    # 1. Try 1Password SSH agent (macOS)
-    if [[ -S "$OP_SSH_SOCK" ]]; then
-        if [[ "$runtime" == "docker" ]]; then
-            # Docker Desktop can mount macOS sockets via gRPC forwarding
-            printf '%s\n' "-v" "${OP_SSH_SOCK}:/ssh-agent" "-e" "SSH_AUTH_SOCK=/ssh-agent"
-        else
-            # Podman Machine: socket must be forwarded into VM first.
-            if podman machine ssh -- test -e /ssh-agent 2>/dev/null; then
-                printf '%s\n' "-v" "/ssh-agent:/ssh-agent" "-e" "SSH_AUTH_SOCK=/ssh-agent"
-            else
-                warn "1Password SSH agent detected but not forwarded into Podman Machine."
-                warn "See README for Podman Machine SSH agent setup."
-            fi
-        fi
+    # macOS: Unix domain sockets cannot pass through virtiofs (Podman Machine)
+    # or be directly mounted in most cases. Docker Desktop has gRPC-based
+    # socket forwarding that may work, but is not guaranteed.
+    #
+    # Linux: sockets can be bind-mounted directly.
+
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        # On macOS, SSH agent sockets (1Password, launchd) cannot be forwarded
+        # into Podman Machine VMs due to virtiofs limitations.
+        # Git over HTTPS is recommended; SSH keys can be configured inside
+        # the container separately if needed.
         return
     fi
 
-    # 2. Standard SSH_AUTH_SOCK (Linux only — macOS launchd sockets cannot be mounted)
-    if [[ -n "${SSH_AUTH_SOCK:-}" && "$(uname -s)" != "Darwin" ]]; then
+    # Linux: forward standard SSH_AUTH_SOCK
+    if [[ -n "${SSH_AUTH_SOCK:-}" ]]; then
         printf '%s\n' "-v" "${SSH_AUTH_SOCK}:/ssh-agent" "-e" "SSH_AUTH_SOCK=/ssh-agent"
     fi
 }
