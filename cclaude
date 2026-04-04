@@ -289,7 +289,6 @@ run_claude_ssh() {
         -v "${CCC_CONTAINER_CLAUDE_HOME}:/root/.claude"
         -v "${CCC_CONTAINER_CLAUDE_JSON}:/root/.claude.json"
         -p "127.0.0.1:${CCC_SSH_PORT}:22"
-        -p "127.0.0.1:19400-19499:19400-19499"
         -e "TERM=${TERM:-xterm-256color}"
     )
 
@@ -424,8 +423,6 @@ run_claude() {
         # Container-specific Claude home (copied from host on first run)
         -v "${CCC_CONTAINER_CLAUDE_HOME}:/root/.claude"
         -v "${CCC_CONTAINER_CLAUDE_JSON}:/root/.claude.json"
-        # Expose port range for OAuth callback (Claude Code uses a local HTTP server)
-        -p "127.0.0.1:19400-19499:19400-19499"
         # Terminal
         -e "TERM=${TERM:-xterm-256color}"
     )

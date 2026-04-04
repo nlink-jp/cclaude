@@ -100,8 +100,6 @@ cclaude
 API キーなしで `cclaude` を実行します。Claude Code がターミナルに OAuth ログイン URL を表示するので、
 ホストのブラウザでその URL を開いて認証します。ログイン状態は `~/.claude/` に永続化されます。
 
-OAuth コールバック用にポート範囲 `127.0.0.1:19400-19499` がコンテナからフォワードされます。
-
 ## 設定
 
 設定ファイル: `${XDG_CONFIG_HOME:-~/.config}/cclaude/config.toml`

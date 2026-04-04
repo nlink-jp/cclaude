@@ -107,8 +107,6 @@ cclaude
 
 Run `cclaude` without an API key. Claude Code will display an OAuth login URL in the terminal. Open the URL in your host browser to authenticate. The login state is persisted in `~/.claude/` across sessions.
 
-Port range `127.0.0.1:19400-19499` is forwarded from the container for the OAuth callback.
-
 ---
 
 ## Configuration
