@@ -216,6 +216,8 @@ Or: `CCC_PUBLISH_PORTS="3000,5173" cclaude`
 
 This publishes `127.0.0.1:3000` on the host, forwarding to the container's port 3000.
 
+> **Important**: Dev servers inside the container must bind to `0.0.0.0`, not `127.0.0.1`. Many tools (Vite, Next.js, etc.) default to localhost only, which is unreachable from outside the container. Use `--host 0.0.0.0` or equivalent option when starting the server. If Claude Code starts a dev server, instruct it to bind to `0.0.0.0` (e.g., via project CLAUDE.md).
+
 #### Direct hostname access
 
 Without port forwarding, host services are also available via runtime-specific hostnames:
