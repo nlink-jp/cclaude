@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [0.3.0] - 2026-04-04
+
+### Added
+
+- **Custom `.npmrc` for supply chain hardening**: Default `.npmrc` with `engine-strict`, `ignore-scripts`, `audit` baked into the image. Override by placing `~/.config/cclaude/npmrc`. Mounted read-only.
+- Improved port conflict error message with guidance to check `publish_ports` and restart Podman Machine.
+
+### Fixed
+
+- **Cleanup on Ctrl+D exit**: `ssh` returns non-zero when Claude Code exits via Ctrl+D, which caused `set -e` to skip cleanup. Fixed with `|| true`.
+- **Trap variable scoping**: Cleanup trap handler now uses global variables (`_CCC_CLEANUP_*`) instead of `local` variables, which were invisible to the trap when fired at script exit.
+- **Orphan container cleanup**: Reverted to PID-based container names (`cclaude-ssh-$$`) for safe concurrent use. Orphan detection checks if the parent PID is still alive before stopping.
+- **Dockerfile age check timezone**: Use `.Created.Unix` (epoch) from image inspect instead of parsing timestamp strings, fixing false warnings on non-UTC systems.
+
 ## [0.2.1] - 2026-04-04
 
 ### Fixed
@@ -65,6 +79,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - BATS test suite (24 tests) and shellcheck-clean.
 
 
+[0.3.0]: https://github.com/nlink-jp/cclaude/releases/tag/v0.3.0
 [0.2.1]: https://github.com/nlink-jp/cclaude/releases/tag/v0.2.1
 [0.2.0]: https://github.com/nlink-jp/cclaude/releases/tag/v0.2.0
 [0.1.0]: https://github.com/nlink-jp/cclaude/releases/tag/v0.1.0
