@@ -362,10 +362,17 @@ run_claude_ssh() {
             rmdir "$(dirname "$ssh_key")" 2>/dev/null || true
         fi
     }
-    trap cleanup_ssh_container EXIT
+    trap cleanup_ssh_container EXIT INT TERM
+
+    # Stop any leftover container from a previous session
+    "$runtime" stop "${CCC_CONTAINER_NAME}" &>/dev/null || true
 
     # Start container with sshd
-    "$runtime" "${run_args[@]}" "$image" bash -c "$init_script" >/dev/null
+    if ! "$runtime" "${run_args[@]}" "$image" bash -c "$init_script" >/dev/null 2>&1; then
+        # Show the actual error
+        "$runtime" "${run_args[@]}" "$image" bash -c "$init_script" 2>&1 || true
+        die "Failed to start container."
+    fi
 
     # Wait for sshd to be ready
     local retries=0
