@@ -19,6 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ripgrep \
         socat \
         unzip \
+        zip \
         zsh \
     && rm -rf /var/lib/apt/lists/*
 
