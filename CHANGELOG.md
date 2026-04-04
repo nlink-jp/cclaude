@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [0.3.1] - 2026-04-04
+
+### Changed
+
+- Use native installer (`claude.ai/install.sh`) instead of deprecated npm for Claude Code installation.
+- Document 8GB+ container VM memory requirement for image builds.
+
+### Fixed
+
+- `cclaude --ssh -- --resume` no longer passes `--` to claude (was causing args to be treated as prompts).
+- `CCC_CONFIG_FILE` environment variable override now works (was being unconditionally reassigned).
+- Tests isolated from user config to prevent false failures.
+
 ## [0.3.0] - 2026-04-04
 
 ### Added
@@ -79,6 +92,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - BATS test suite (24 tests) and shellcheck-clean.
 
 
+[0.3.1]: https://github.com/nlink-jp/cclaude/releases/tag/v0.3.1
 [0.3.0]: https://github.com/nlink-jp/cclaude/releases/tag/v0.3.0
 [0.2.1]: https://github.com/nlink-jp/cclaude/releases/tag/v0.2.1
 [0.2.0]: https://github.com/nlink-jp/cclaude/releases/tag/v0.2.0
