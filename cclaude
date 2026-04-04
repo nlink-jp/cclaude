@@ -281,6 +281,8 @@ CCC_SSH_PORT="${CCC_SSH_PORT:-$((49152 + RANDOM % 16384))}"
 CCC_CONTAINER_NAME="cclaude-ssh-$$"
 
 run_claude_ssh() {
+    # Strip leading "--" (cclaude option separator, not meant for claude)
+    [[ "${1:-}" == "--" ]] && shift
     local runtime image host_claude_home project_dir
     runtime="$(detect_runtime)"
     image="$(resolve CCC_IMAGE container image "$CCC_DEFAULT_IMAGE")"
