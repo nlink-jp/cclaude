@@ -27,6 +27,11 @@ node_version = "20"
 # Override: CCC_FORWARD_PORTS (comma-separated, e.g., "8080,11434")
 # forward_ports = [8080, 11434]
 
+# Ports published from container to host (container → host).
+# Makes container services (e.g., dev servers) accessible from the host browser.
+# Override: CCC_PUBLISH_PORTS (comma-separated, e.g., "3000,5173")
+# publish_ports = [3000, 5173]
+
 [paths]
 # Claude Code home directory to persist across sessions
 # Override: CCC_CLAUDE_HOME

@@ -123,7 +123,8 @@ runtime = "auto"       # "podman", "docker", or "auto" (prefers podman)
 image = "cclaude:latest"
 
 [network]
-# forward_ports = [8080, 11434]
+# forward_ports = [8080, 11434]    # host → container (socat)
+# publish_ports = [3000, 5173]     # container → host (-p)
 
 [toolchain]
 go_version = "1.23.4"
@@ -140,7 +141,8 @@ claude_home = "~/.claude"
 | `ANTHROPIC_API_KEY` | Claude API key (optional if using subscription) | — |
 | `CCC_RUNTIME` | Container runtime | `auto` |
 | `CCC_IMAGE` | Container image name | `cclaude:latest` |
-| `CCC_FORWARD_PORTS` | Comma-separated ports to forward (e.g., `8080,11434`) | — |
+| `CCC_FORWARD_PORTS` | Ports forwarded host → container (e.g., `8080,11434`) | — |
+| `CCC_PUBLISH_PORTS` | Ports published container → host (e.g., `3000,5173`) | — |
 | `CCC_CLAUDE_HOME` | Claude home directory | `~/.claude` |
 | `CCC_GO_VERSION` | Go version for image build | `1.23.4` |
 | `CCC_NODE_VERSION` | Node.js version for image build | `20` |
@@ -201,6 +203,19 @@ CCC_FORWARD_PORTS="8080,11434" cclaude
 ```
 
 With this configuration, `http://localhost:8080` inside the container reaches the host's `localhost:8080`.
+
+#### Port Publishing (container → host)
+
+To make services running inside the container accessible from the host (e.g., a dev server started by Claude Code):
+
+```toml
+[network]
+publish_ports = [3000, 5173]
+```
+
+Or: `CCC_PUBLISH_PORTS="3000,5173" cclaude`
+
+This publishes `127.0.0.1:3000` on the host, forwarding to the container's port 3000.
 
 #### Direct hostname access
 

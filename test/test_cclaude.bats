@@ -212,6 +212,13 @@ image = "from-config:v1"'
     [[ "$output" =~ "claude"$ ]]
 }
 
+@test "publish_ports adds -p flags" {
+    CCC_PUBLISH_PORTS="3000,5173" run_ccc_dry_with_runtime podman
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "127.0.0.1:3000:3000" ]]
+    [[ "$output" =~ "127.0.0.1:5173:5173" ]]
+}
+
 @test "forward_ports uses host.docker.internal for docker" {
     CCC_FORWARD_PORTS="8080" run_ccc_dry_with_runtime docker
     [ "$status" -eq 0 ]

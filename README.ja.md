@@ -114,7 +114,8 @@ runtime = "auto"       # "podman", "docker", "auto"（podman 優先）
 image = "cclaude:latest"
 
 [network]
-# forward_ports = [8080, 11434]
+# forward_ports = [8080, 11434]    # ホスト→コンテナ (socat)
+# publish_ports = [3000, 5173]     # コンテナ→ホスト (-p)
 
 [toolchain]
 go_version = "1.23.4"
@@ -131,7 +132,8 @@ claude_home = "~/.claude"
 | `ANTHROPIC_API_KEY` | Claude API キー（サブスクリプション利用時は不要） | — |
 | `CCC_RUNTIME` | コンテナランタイム | `auto` |
 | `CCC_IMAGE` | コンテナイメージ名 | `cclaude:latest` |
-| `CCC_FORWARD_PORTS` | 転送ポート（カンマ区切り、例: `8080,11434`） | — |
+| `CCC_FORWARD_PORTS` | ホスト→コンテナ転送ポート（例: `8080,11434`） | — |
+| `CCC_PUBLISH_PORTS` | コンテナ→ホスト公開ポート（例: `3000,5173`） | — |
 | `CCC_CLAUDE_HOME` | Claude ホームディレクトリ | `~/.claude` |
 | `CCC_GO_VERSION` | イメージビルド時の Go バージョン | `1.23.4` |
 | `CCC_NODE_VERSION` | イメージビルド時の Node.js バージョン | `20` |
@@ -192,6 +194,19 @@ CCC_FORWARD_PORTS="8080,11434" cclaude
 ```
 
 この設定により、コンテナ内の `http://localhost:8080` がホストの `localhost:8080` に到達します。
+
+#### ポートパブリッシング（コンテナ→ホスト��
+
+コンテナ内で動作するサービス（例: Claude Code が起動した開発サーバー）をホストからアクセス可能にするには:
+
+```toml
+[network]
+publish_ports = [3000, 5173]
+```
+
+環境変数: `CCC_PUBLISH_PORTS="3000,5173" cclaude`
+
+ホストの `127.0.0.1:3000` が��ンテナのポート 3000 に転送されます。
 
 #### ホスト名による直接アクセス
 
