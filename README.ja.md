@@ -1,0 +1,220 @@
+# cclaude
+
+[Claude Code](https://docs.anthropic.com/en/docs/claude-code) を隔離されたコンテナ内で実行するコマンドラインツール。
+カレントディレクトリだけがマウントされるため、Claude Code はプロジェクト外にアクセスできません。
+Claude Code の状態（`~/.claude`）はホスト上に永続化されます。
+
+## 機能
+
+- **セキュリティ隔離**: Claude Code はコンテナ内で実行され、マウントされたプロジェクトディレクトリのみアクセス可能
+- **メモリ永続化**: `~/.claude/`（プロジェクトメモリ、設定、会話履歴）はコンテナ再起動後も保持される
+- **サブスクリプション & API キー対応**: Claude サブスクリプション（OAuth）と API キー認証の両方に対応
+- **プリインストール済みツールチェーン**: Go、Node.js、Python（uv）がすぐに使える
+- **サンドボックスの問題を回避**: コンテナレベルの隔離により、サンドボックスモードとビルドツールの非互換性を解消
+- **自動検出**: Podman または Docker を自動検出（Podman 優先）
+- **カスタマイズ可能**: TOML 設定ファイル + 環境変数オーバーライド。Dockerfile を拡張してツールチェーンを追加可能
+
+## インストール
+
+### 前提条件
+
+- [Podman](https://podman.io/) または [Docker](https://www.docker.com/)
+- Bash 4+
+
+### ソースからインストール
+
+```bash
+git clone https://github.com/nlink-jp/cclaude.git
+cd cclaude
+make install        # /usr/local/bin/cclaude にインストール
+cclaude --build     # コンテナイメージをビルド
+```
+
+`/usr/local/bin` に書き込み権限がない場合は、別のディレクトリを指定できます:
+
+```bash
+make install PREFIX=$HOME/.local    # ~/.local/bin/cclaude にインストール
+```
+
+`make install` で配置されるファイル:
+- `cclaude` スクリプト → `$(PREFIX)/bin/cclaude`（デフォルト: `/usr/local/bin/cclaude`）
+- `Dockerfile` → `~/.config/cclaude/Dockerfile`
+- `config.toml` → `~/.config/cclaude/config.toml`（既存の場合はスキップ）
+
+## クイックスタート
+
+```bash
+# コンテナイメージをビルド（初回のみ）
+cclaude --build
+
+# 任意のプロジェクトディレクトリで Claude Code を起動
+cd ~/my-project
+cclaude
+```
+
+## 使い方
+
+```
+cclaude [options] [-- claude-args...]
+```
+
+| オプション | 説明 |
+|-----------|------|
+| `cclaude` | カレントディレクトリで Claude Code を起動 |
+| `cclaude --build` | コンテナイメージをビルド/リビルド |
+| `cclaude --shell` | コンテナ内の bash シェルを開く（デバッグ用） |
+| `cclaude --config` | 解決済みの設定を表示 |
+| `cclaude --version` | バージョンを表示 |
+| `cclaude --help` | ヘルプを表示 |
+| `cclaude -- <args>` | `claude` に引数を直接渡す |
+
+### 例
+
+```bash
+# 対話セッション
+cclaude
+
+# claude に引数を渡す
+cclaude -- -p "go test ./... を実行して"
+
+# デバッグ: コンテナのシェルに入る
+cclaude --shell
+
+# 解決済み設定を確認
+cclaude --config
+```
+
+## 認証
+
+### API キー
+
+`ANTHROPIC_API_KEY` 環境変数を設定:
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+cclaude
+```
+
+### サブスクリプション（OAuth）
+
+API キーなしで `cclaude` を実行します。Claude Code がターミナルに OAuth ログイン URL を表示するので、
+ホストのブラウザでその URL を開いて認証します。ログイン状態は `~/.claude/` に永続化されます。
+
+OAuth コールバック用にポート範囲 `127.0.0.1:19400-19499` がコンテナからフォワードされます。
+
+## 設定
+
+設定ファイル: `${XDG_CONFIG_HOME:-~/.config}/cclaude/config.toml`
+
+環境変数は設定ファイルの値を上書きします。
+
+```toml
+[container]
+runtime = "auto"       # "podman", "docker", "auto"（podman 優先）
+image = "cclaude:latest"
+
+[toolchain]
+go_version = "1.23.4"
+node_version = "20"
+
+[paths]
+claude_home = "~/.claude"
+```
+
+### 環境変数
+
+| 変数 | 説明 | デフォルト |
+|------|------|-----------|
+| `ANTHROPIC_API_KEY` | Claude API キー（サブスクリプション利用時は不要） | — |
+| `CCC_RUNTIME` | コンテナランタイム | `auto` |
+| `CCC_IMAGE` | コンテナイメージ名 | `cclaude:latest` |
+| `CCC_CLAUDE_HOME` | Claude ホームディレクトリ | `~/.claude` |
+| `CCC_GO_VERSION` | イメージビルド時の Go バージョン | `1.23.4` |
+| `CCC_NODE_VERSION` | イメージビルド時の Node.js バージョン | `20` |
+| `CCC_DRY_RUN=1` | コンテナコマンドを実行せず表示のみ | — |
+
+## 仕組み
+
+### パスマッピング
+
+プロジェクトディレクトリはコンテナ内で**ホストと同じ絶対パス**にマウントされます:
+
+```
+ホスト:    /Users/user/my-project
+コンテナ:  /Users/user/my-project  （同一パス）
+```
+
+Claude Code はプロジェクトメモリを絶対パスベースで保存します（例: `~/.claude/projects/-Users-user-my-project/`）。
+同じパスを使用することで、ホストとコンテナ間でプロジェクトメモリの完全な互換性が維持されます。
+
+### 永続化される状態
+
+ホストの `~/.claude/` がコンテナ内の `/root/.claude` にバインドマウントされます:
+
+- `settings.json` — パーミッションとプラグイン設定
+- `projects/` — プロジェクト固有のメモリと会話成果物
+- `history.jsonl` — 会話履歴
+- `plugins/` — LSP サーバーとスキル
+- OAuth トークン — サブスクリプション認証状態
+
+### SSH エージェント転送
+
+ホストで `SSH_AUTH_SOCK` が設定されている場合、SSH エージェントソケットがコンテナに転送されます。
+コンテナ内での `git clone` / `git push`（SSH 経由）が可能になります。
+
+## イメージのカスタマイズ
+
+デフォルトイメージには Go、Node.js、Python（uv）が含まれています。ツールチェーンを追加するには:
+
+1. `~/.config/cclaude/Dockerfile` を編集
+2. パッケージを追加（例: Rust、Java、Ruby）
+3. リビルド: `cclaude --build`
+
+### 例: Rust を追加
+
+```dockerfile
+# Dockerfile に追記
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+```
+
+### 例: Java（Eclipse Temurin）を追加
+
+```dockerfile
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        temurin-21-jdk \
+    && rm -rf /var/lib/apt/lists/*
+```
+
+## ビルド
+
+```bash
+make build        # スクリプト + アセットを dist/ にコピー
+make install      # /usr/local/bin にインストール
+make image-build  # コンテナイメージをビルド
+make test         # shellcheck + BATS テスト
+make lint         # shellcheck のみ
+make clean        # dist/ を削除
+```
+
+## プラットフォームに関する注意事項
+
+### macOS（Docker Desktop / Podman Machine）
+
+Linux VM を経由するボリュームマウントは、ネイティブ Linux より I/O が遅くなる場合があります。
+Docker Desktop および Podman Machine on macOS の既知の制限です。
+大規模プロジェクトではネイティブ Linux の使用を検討してください。
+
+### Docker: ファイル所有権
+
+Docker（Podman でない場合）では、コンテナ内で作成されたファイルがホスト上で root 所有になる場合があります。
+Podman のルートレスモードはコンテナの root をホストユーザーにマッピングするため、この問題を回避できます。
+
+### SELinux（Podman）
+
+Podman 使用時は `--security-opt label=disable` が自動的に適用され、
+SELinux 環境でのバインドマウントが正しく動作します。
+
+## ライセンス
+
+このプロジェクトは [MIT License](https://opensource.org/licenses/MIT) の下で公開されています。

@@ -1,0 +1,26 @@
+# cclaude — Containerized Claude Code
+# Configuration file
+#
+# Location: ${XDG_CONFIG_HOME:-~/.config}/cclaude/config.toml
+# Environment variables override these values.
+# See README.md for full documentation.
+
+[container]
+# Container runtime: "podman", "docker", or "auto" (prefers podman)
+# Override: CCC_RUNTIME
+runtime = "auto"
+
+# Container image name
+# Override: CCC_IMAGE
+image = "cclaude:latest"
+
+[toolchain]
+# Toolchain versions used when building the image (cclaude --build).
+# Override: CCC_GO_VERSION, CCC_NODE_VERSION
+go_version = "1.23.4"
+node_version = "20"
+
+[paths]
+# Claude Code home directory to persist across sessions
+# Override: CCC_CLAUDE_HOME
+claude_home = "~/.claude"
