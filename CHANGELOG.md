@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [0.3.2] - 2026-04-04
+
+### Fixed
+
+- Document that dev servers inside the container must bind to `0.0.0.0` (not `127.0.0.1`) for `publish_ports` to work.
+
 ## [0.3.1] - 2026-04-04
 
 ### Changed
@@ -92,6 +98,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - BATS test suite (24 tests) and shellcheck-clean.
 
 
+[0.3.2]: https://github.com/nlink-jp/cclaude/releases/tag/v0.3.2
 [0.3.1]: https://github.com/nlink-jp/cclaude/releases/tag/v0.3.1
 [0.3.0]: https://github.com/nlink-jp/cclaude/releases/tag/v0.3.0
 [0.2.1]: https://github.com/nlink-jp/cclaude/releases/tag/v0.2.1
