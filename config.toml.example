@@ -20,6 +20,13 @@ image = "cclaude:latest"
 go_version = "1.23.4"
 node_version = "20"
 
+[network]
+# Ports forwarded from container localhost to host localhost via socat.
+# This makes host services (e.g., local LLM APIs) accessible as localhost
+# inside the container, hiding the fact that Claude Code runs in a container.
+# Override: CCC_FORWARD_PORTS (comma-separated, e.g., "8080,11434")
+# forward_ports = [8080, 11434]
+
 [paths]
 # Claude Code home directory to persist across sessions
 # Override: CCC_CLAUDE_HOME

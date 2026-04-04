@@ -122,6 +122,9 @@ Environment variables override config file values.
 runtime = "auto"       # "podman", "docker", or "auto" (prefers podman)
 image = "cclaude:latest"
 
+[network]
+# forward_ports = [8080, 11434]
+
 [toolchain]
 go_version = "1.23.4"
 node_version = "20"
@@ -137,6 +140,7 @@ claude_home = "~/.claude"
 | `ANTHROPIC_API_KEY` | Claude API key (optional if using subscription) | — |
 | `CCC_RUNTIME` | Container runtime | `auto` |
 | `CCC_IMAGE` | Container image name | `cclaude:latest` |
+| `CCC_FORWARD_PORTS` | Comma-separated ports to forward (e.g., `8080,11434`) | — |
 | `CCC_CLAUDE_HOME` | Claude home directory | `~/.claude` |
 | `CCC_GO_VERSION` | Go version for image build | `1.23.4` |
 | `CCC_NODE_VERSION` | Node.js version for image build | `20` |
@@ -181,14 +185,31 @@ cclaude    # re-copies from host ~/.claude/
 
 ### Host Network Access
 
-The container can access services running on the host (e.g., local LLM API endpoints). Use the following hostnames inside the container:
+#### Port Forwarding (recommended)
+
+Configure `forward_ports` to make host services accessible as `localhost` inside the container. This uses `socat` to transparently forward ports, so Claude Code and tools inside the container do not need to know they are running in a container.
+
+```toml
+[network]
+forward_ports = [8080, 11434]   # e.g., local LLM API, Ollama
+```
+
+Or via environment variable:
+
+```bash
+CCC_FORWARD_PORTS="8080,11434" cclaude
+```
+
+With this configuration, `http://localhost:8080` inside the container reaches the host's `localhost:8080`.
+
+#### Direct hostname access
+
+Without port forwarding, host services are also available via runtime-specific hostnames:
 
 | Runtime | Hostname |
 |---------|----------|
 | Podman | `host.containers.internal` |
 | Docker | `host.docker.internal` |
-
-Example: if a local LLM API runs on `localhost:8080`, access it from inside the container as `http://host.containers.internal:8080` (Podman) or `http://host.docker.internal:8080` (Docker).
 
 ### SSH Agent Forwarding
 

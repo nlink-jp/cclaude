@@ -58,6 +58,24 @@ config_get() {
     printf '%s' "${value:-$default}"
 }
 
+# config_get_array SECTION KEY — read a TOML inline array like [8080, 11434]
+# Prints one element per line. Returns nothing if key is absent or commented.
+config_get_array() {
+    local section="$1" key="$2"
+    local raw
+    raw="$(config_get "$section" "$key" "")"
+    [[ -z "$raw" ]] && return
+    # Strip brackets, split on comma, trim whitespace
+    raw="${raw#\[}"
+    raw="${raw%\]}"
+    local IFS=','
+    for item in $raw; do
+        item="${item#"${item%%[![:space:]]*}"}"
+        item="${item%"${item##*[![:space:]]}"}"
+        [[ -n "$item" ]] && printf '%s\n' "$item"
+    done
+}
+
 # ---------------------------------------------------------------------------
 # Resolve a config value: env var > config file > default
 # ---------------------------------------------------------------------------
@@ -289,26 +307,58 @@ run_claude() {
     # SSH agent forwarding
     setup_ssh_agent "$runtime"
 
-    # Host network access (e.g., local LLM API endpoints)
+    # Host network access
+    local host_gw
     if [[ "$runtime" == "podman" ]]; then
-        run_args+=(--add-host "host.containers.internal:host-gateway")
+        host_gw="host.containers.internal"
+        run_args+=(--add-host "${host_gw}:host-gateway")
         run_args+=(--security-opt "label=disable")
     else
-        run_args+=(--add-host "host.docker.internal:host-gateway")
+        host_gw="host.docker.internal"
+        run_args+=(--add-host "${host_gw}:host-gateway")
+    fi
+
+    # Port forwarding: container localhost → host localhost via socat
+    local -a forward_ports=()
+    local env_ports="${CCC_FORWARD_PORTS:-}"
+    if [[ -n "$env_ports" ]]; then
+        local IFS=','
+        for p in $env_ports; do
+            p="${p#"${p%%[![:space:]]*}"}"
+            p="${p%"${p##*[![:space:]]}"}"
+            [[ -n "$p" ]] && forward_ports+=("$p")
+        done
+    else
+        while IFS= read -r p; do
+            [[ -n "$p" ]] && forward_ports+=("$p")
+        done < <(config_get_array "network" "forward_ports")
+    fi
+
+    # Build container command
+    local -a container_cmd
+    if [[ ${#forward_ports[@]} -gt 0 ]]; then
+        # Start socat forwarders in background, then exec claude
+        local socat_cmds=""
+        for p in "${forward_ports[@]}"; do
+            socat_cmds+="socat TCP-LISTEN:${p},fork,reuseaddr TCP:${host_gw}:${p} & "
+        done
+        container_cmd=(bash -c "${socat_cmds}exec claude \"\$@\"" -- "$@")
+    else
+        container_cmd=(claude "$@")
     fi
 
     if [[ "${CCC_DRY_RUN:-}" == "1" ]]; then
         printf '%s' "$runtime"
         printf ' %s' "${run_args[@]}"
-        printf ' %s claude' "$image"
-        for arg in "$@"; do
+        printf ' %s' "$image"
+        for arg in "${container_cmd[@]}"; do
             printf ' %s' "$arg"
         done
         printf '\n'
         return 0
     fi
 
-    exec "$runtime" "${run_args[@]}" "$image" claude "$@"
+    exec "$runtime" "${run_args[@]}" "$image" "${container_cmd[@]}"
 }
 
 # ---------------------------------------------------------------------------
@@ -380,6 +430,18 @@ project_dir        = $(pwd)
 [toolchain] (used at image build time)
 go_version    = $(resolve CCC_GO_VERSION toolchain go_version 1.23.4)
 node_version  = $(resolve CCC_NODE_VERSION toolchain node_version 20)
+
+[network]
+forward_ports = $(
+    local env_ports="${CCC_FORWARD_PORTS:-}"
+    if [[ -n "$env_ports" ]]; then
+        printf '%s' "$env_ports"
+    else
+        local ports
+        ports="$(config_get_array "network" "forward_ports" | paste -sd, -)"
+        printf '%s' "${ports:-(none)}"
+    fi
+)
 
 [environment]
 ANTHROPIC_API_KEY = ${ANTHROPIC_API_KEY:+(set)}${ANTHROPIC_API_KEY:-(not set)}

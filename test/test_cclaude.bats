@@ -192,6 +192,33 @@ image = "from-config:v1"'
 }
 
 # =========================================================================
+# Port forwarding (socat)
+# =========================================================================
+
+@test "forward_ports starts socat in container command" {
+    CCC_FORWARD_PORTS="8080,11434" run_ccc_dry_with_runtime podman
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "socat TCP-LISTEN:8080" ]]
+    [[ "$output" =~ "socat TCP-LISTEN:11434" ]]
+    [[ "$output" =~ "host.containers.internal:8080" ]]
+    [[ "$output" =~ "host.containers.internal:11434" ]]
+}
+
+@test "no forward_ports runs claude directly" {
+    unset CCC_FORWARD_PORTS
+    CCC_CONFIG_FILE="/nonexistent" run_ccc_dry_with_runtime podman
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "socat" ]]
+    [[ "$output" =~ "claude"$ ]]
+}
+
+@test "forward_ports uses host.docker.internal for docker" {
+    CCC_FORWARD_PORTS="8080" run_ccc_dry_with_runtime docker
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "host.docker.internal:8080" ]]
+}
+
+# =========================================================================
 # OAuth port forwarding
 # =========================================================================
 

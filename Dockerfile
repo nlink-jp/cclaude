@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         make \
         openssh-client \
         ripgrep \
+        socat \
         unzip \
         zsh \
     && rm -rf /var/lib/apt/lists/*
