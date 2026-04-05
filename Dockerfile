@@ -77,4 +77,11 @@ RUN git config --global --add safe.directory '*'
 # Skip auto-updates inside the container
 ENV DISABLE_AUTOUPDATER=1
 
+# Ensure PATH is available in SSH login shells (sshd does not inherit Dockerfile ENV)
+RUN printf '%s\n' \
+    'export PATH="/root/.local/bin:/usr/local/go/bin:/root/go/bin:$PATH"' \
+    'export DISABLE_AUTOUPDATER=1' \
+    > /root/.profile \
+    && cp /root/.profile /root/.bashrc
+
 WORKDIR /workspace
