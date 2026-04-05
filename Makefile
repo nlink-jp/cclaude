@@ -10,7 +10,8 @@ build:
 	@mkdir -p dist
 	cp cclaude dist/$(BINARY)
 	chmod +x dist/$(BINARY)
-	sed -i'' -e 's/^CCC_VERSION=".*"/CCC_VERSION="$(VERSION)"/' dist/$(BINARY)
+	sed 's/^CCC_VERSION=".*"/CCC_VERSION="$(VERSION)"/' dist/$(BINARY) > dist/$(BINARY).tmp && mv dist/$(BINARY).tmp dist/$(BINARY)
+	chmod +x dist/$(BINARY)
 	cp Dockerfile dist/
 	cp config.toml.example dist/
 	cp npmrc.example dist/
