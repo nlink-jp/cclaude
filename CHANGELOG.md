@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [0.4.0] - 2026-04-05
+
+### Added
+
+- **`extra_mounts`**: Mount additional directories into the container beyond the project root. Configure via `[container] extra_mounts` in config.toml or `CCC_EXTRA_MOUNTS` env var.
+- Document that `cclaude` must be run from the project root directory, not a parent directory containing multiple projects.
+
 ## [0.3.3] - 2026-04-05
 
 ### Fixed
@@ -105,6 +112,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - BATS test suite (24 tests) and shellcheck-clean.
 
 
+[0.4.0]: https://github.com/nlink-jp/cclaude/releases/tag/v0.4.0
 [0.3.3]: https://github.com/nlink-jp/cclaude/releases/tag/v0.3.3
 [0.3.2]: https://github.com/nlink-jp/cclaude/releases/tag/v0.3.2
 [0.3.1]: https://github.com/nlink-jp/cclaude/releases/tag/v0.3.1
