@@ -7,13 +7,13 @@ load test_helper
 # =========================================================================
 
 @test "--version prints version string" {
-    run "$CCC_BIN" --version
+    run bash "$CCC_SRC" --version
     [ "$status" -eq 0 ]
     [[ "$output" =~ ^cclaude\ [0-9]+\.[0-9]+\.[0-9] ]]
 }
 
 @test "--help prints usage" {
-    run "$CCC_BIN" --help
+    run bash "$CCC_SRC" --help
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Containerized Claude Code" ]]
     [[ "$output" =~ "--build" ]]
@@ -21,13 +21,13 @@ load test_helper
 }
 
 @test "-h is alias for --help" {
-    run "$CCC_BIN" -h
+    run bash "$CCC_SRC" -h
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Containerized Claude Code" ]]
 }
 
 @test "unknown option fails" {
-    run "$CCC_BIN" --nonexistent
+    run bash "$CCC_SRC" --nonexistent
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Unknown option" ]]
 }
@@ -57,7 +57,7 @@ load test_helper
 runtime = "docker"
 image = "my-image:v1"'
 
-    CCC_DRY_RUN=1 run "$CCC_BIN" --config
+    CCC_DRY_RUN=1 run bash "$CCC_SRC" --config
     [ "$status" -eq 0 ]
     [[ "$output" =~ "image         = my-image:v1" ]]
 
@@ -68,7 +68,7 @@ image = "my-image:v1"'
     setup_config '[container]
 image = "from-config:v1"'
 
-    CCC_IMAGE="from-env:v2" CCC_DRY_RUN=1 run "$CCC_BIN" --config
+    CCC_IMAGE="from-env:v2" CCC_DRY_RUN=1 run bash "$CCC_SRC" --config
     [ "$status" -eq 0 ]
     [[ "$output" =~ "image         = from-env:v2" ]]
 
@@ -76,7 +76,7 @@ image = "from-config:v1"'
 }
 
 @test "missing config file uses defaults" {
-    CCC_CONFIG_FILE="/nonexistent/config.toml" CCC_DRY_RUN=1 CCC_RUNTIME=podman run "$CCC_BIN" --config
+    CCC_CONFIG_FILE="/nonexistent/config.toml" CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
     [ "$status" -eq 0 ]
     [[ "$output" =~ "image" ]] && [[ "$output" =~ "cclaude:latest" ]]
 }
@@ -241,7 +241,7 @@ image = "from-config:v1"'
 # =========================================================================
 
 @test "--ssh mode starts detached container with sshd" {
-    CCC_DRY_RUN=1 CCC_RUNTIME=podman run "$CCC_BIN" --ssh
+    CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --ssh
     [ "$status" -eq 0 ]
     [[ "$output" =~ "run -d --rm" ]]
     [[ "$output" =~ "sshd -D" ]]
@@ -249,7 +249,7 @@ image = "from-config:v1"'
 }
 
 @test "--ssh mode includes ssh -A command" {
-    CCC_DRY_RUN=1 CCC_RUNTIME=podman run "$CCC_BIN" --ssh
+    CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --ssh
     [ "$status" -eq 0 ]
     [[ "$output" =~ "ssh -A -t" ]]
     [[ "$output" =~ "claude" ]]
@@ -260,7 +260,7 @@ image = "from-config:v1"'
 # =========================================================================
 
 @test "--shell launches bash instead of claude" {
-    CCC_DRY_RUN=1 CCC_RUNTIME=podman run "$CCC_BIN" --shell
+    CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --shell
     [ "$status" -eq 0 ]
     # Last word should be "bash", not "claude"
     [[ "$output" =~ " bash"$ ]]
@@ -278,7 +278,7 @@ image = "from-config:v1"'
 }
 
 @test "arguments after -- are passed to claude" {
-    CCC_DRY_RUN=1 CCC_RUNTIME=podman run "$CCC_BIN" -- -p "hello"
+    CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" -- -p "hello"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "claude -p hello" ]]
 }

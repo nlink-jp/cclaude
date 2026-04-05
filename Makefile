@@ -1,16 +1,15 @@
 BINARY  := cclaude
+SRC     := src/cclaude.sh
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 PREFIX  ?= /usr/local
 DESTDIR ?=
 
 .PHONY: build install uninstall image-build test lint check clean help
 
-## build: Copy script and assets to dist/
+## build: Build script and assets to dist/
 build:
 	@mkdir -p dist
-	cp cclaude dist/$(BINARY)
-	chmod +x dist/$(BINARY)
-	sed 's/^CCC_VERSION=".*"/CCC_VERSION="$(VERSION)"/' dist/$(BINARY) > dist/$(BINARY).tmp && mv dist/$(BINARY).tmp dist/$(BINARY)
+	sed 's/^CCC_VERSION=".*"/CCC_VERSION="$(VERSION)"/' $(SRC) > dist/$(BINARY)
 	chmod +x dist/$(BINARY)
 	cp Dockerfile dist/
 	cp config.toml.example dist/
@@ -49,7 +48,7 @@ test: lint
 
 ## lint: Run shellcheck
 lint:
-	shellcheck cclaude
+	shellcheck $(SRC)
 
 ## check: lint + test
 check: lint test

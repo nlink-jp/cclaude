@@ -264,6 +264,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 ## 開発
 
+### プロジェクト構成
+
+```
+src/cclaude.sh      ← ソースコード（実行権限なし）
+dist/cclaude        ← ビルド成果物（make build で生成）
+Dockerfile          ← コンテナイメージ定義
+config.toml.example ← デフォルト設定テンプレート
+npmrc.example       ← npm セキュリティ強化テンプレート
+test/               ← BATS テストスイート
+```
+
 ### 前提ツール
 
 - [ShellCheck](https://www.shellcheck.net/) — bash スクリプトの静的解析
@@ -280,7 +291,7 @@ apt install shellcheck bats
 ### Make ターゲット
 
 ```bash
-make build        # スクリプト + アセットを dist/ にコピー
+make build        # src/cclaude.sh → dist/cclaude（バージョン注入付き）
 make install      # /usr/local/bin にインストール
 make image-build  # コンテナイメージをビルド
 make test         # shellcheck + BATS テスト

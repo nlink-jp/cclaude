@@ -277,6 +277,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 ## Development
 
+### Project layout
+
+```
+src/cclaude.sh      ← source (not executable)
+dist/cclaude        ← build output (make build)
+Dockerfile          ← container image definition
+config.toml.example ← default config template
+npmrc.example       ← npm security hardening template
+test/               ← BATS test suite
+```
+
 ### Prerequisites
 
 - [ShellCheck](https://www.shellcheck.net/) — static analysis for the bash script
@@ -293,7 +304,7 @@ apt install shellcheck bats
 ### Make targets
 
 ```bash
-make build        # copy script + assets to dist/
+make build        # build src/cclaude.sh → dist/cclaude (with version injection)
 make install      # install to /usr/local/bin
 make image-build  # build container image
 make test         # shellcheck + BATS tests

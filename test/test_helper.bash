@@ -1,21 +1,21 @@
 # test_helper.bash — shared helpers for cclaude BATS tests
 
-# Path to the cclaude script under test
-CCC_BIN="${BATS_TEST_DIRNAME}/../cclaude"
+# Path to the cclaude source script
+CCC_SRC="${BATS_TEST_DIRNAME}/../src/cclaude.sh"
 
 # Isolate tests from user's config file
 export CCC_CONFIG_FILE="/dev/null"
 
 # Run cclaude in dry-run mode with controlled environment
 run_ccc_dry() {
-    CCC_DRY_RUN=1 run "$CCC_BIN" "$@"
+    CCC_DRY_RUN=1 run bash "$CCC_SRC" "$@"
 }
 
 # Run cclaude in dry-run mode with specific runtime
 run_ccc_dry_with_runtime() {
     local runtime="$1"
     shift
-    CCC_DRY_RUN=1 CCC_RUNTIME="$runtime" run "$CCC_BIN" "$@"
+    CCC_DRY_RUN=1 CCC_RUNTIME="$runtime" run bash "$CCC_SRC" "$@"
 }
 
 # Create a temporary config file and set CCC_CONFIG_FILE
