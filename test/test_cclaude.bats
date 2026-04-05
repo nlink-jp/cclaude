@@ -219,6 +219,13 @@ image = "from-config:v1"'
     [[ "$output" =~ "127.0.0.1:5173:5173" ]]
 }
 
+@test "extra_mounts adds volume flags" {
+    CCC_EXTRA_MOUNTS="/tmp/shared,/tmp/other" run_ccc_dry_with_runtime podman
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "-v /tmp/shared:/tmp/shared" ]]
+    [[ "$output" =~ "-v /tmp/other:/tmp/other" ]]
+}
+
 @test "forward_ports uses host.docker.internal for docker" {
     CCC_FORWARD_PORTS="8080" run_ccc_dry_with_runtime docker
     [ "$status" -eq 0 ]

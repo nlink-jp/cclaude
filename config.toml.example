@@ -20,6 +20,11 @@ image = "cclaude:latest"
 # Override: CCC_MODE or --ssh flag
 mode = "direct"
 
+# Additional directories to mount into the container (same path on both sides).
+# Useful when Claude Code needs access to shared files outside the project root.
+# Override: CCC_EXTRA_MOUNTS (comma-separated)
+# extra_mounts = ["/Users/me/works/shared-lib", "/Users/me/.github"]
+
 [toolchain]
 # Toolchain versions used when building the image (cclaude --build).
 # Override: CCC_GO_VERSION, CCC_NODE_VERSION

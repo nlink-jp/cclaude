@@ -57,6 +57,8 @@ cd ~/my-project
 cclaude
 ```
 
+> **Important**: Always run `cclaude` from the **project root directory** (where `.git/`, `go.mod`, `package.json`, etc. live). If you run it from a parent directory containing multiple projects, Claude Code may not correctly identify the project scope and could clone repositories instead of editing local files.
+
 ---
 
 ## Usage
@@ -120,6 +122,7 @@ Environment variables override config file values.
 [container]
 runtime = "auto"       # "podman", "docker", or "auto" (prefers podman)
 image = "cclaude:latest"
+# extra_mounts = ["/path/to/shared-lib"]   # additional directories to mount
 
 [network]
 # forward_ports = [8080, 11434]    # host → container (socat)
@@ -140,6 +143,7 @@ claude_home = "~/.claude"
 | `ANTHROPIC_API_KEY` | Claude API key (optional if using subscription) | — |
 | `CCC_RUNTIME` | Container runtime | `auto` |
 | `CCC_IMAGE` | Container image name | `cclaude:latest` |
+| `CCC_EXTRA_MOUNTS` | Additional directories to mount (comma-separated) | — |
 | `CCC_FORWARD_PORTS` | Ports forwarded host → container (e.g., `8080,11434`) | — |
 | `CCC_PUBLISH_PORTS` | Ports published container → host (e.g., `3000,5173`) | — |
 | `CCC_CLAUDE_HOME` | Claude home directory | `~/.claude` |

@@ -272,6 +272,30 @@ setup_npmrc() {
     fi
 }
 
+# Mount extra directories from config or env
+setup_extra_mounts() {
+    local -a mounts=()
+    local env_val="${CCC_EXTRA_MOUNTS:-}"
+    if [[ -n "$env_val" ]]; then
+        local IFS=','
+        for m in $env_val; do
+            m="${m#"${m%%[![:space:]]*}"}"
+            m="${m%"${m##*[![:space:]]}"}"
+            [[ -n "$m" ]] && mounts+=("$m")
+        done
+    else
+        while IFS= read -r m; do
+            [[ -n "$m" ]] && mounts+=("$m")
+        done < <(config_get_array "container" "extra_mounts")
+    fi
+    if [[ ${#mounts[@]} -gt 0 ]]; then
+        for m in "${mounts[@]}"; do
+            # Mount at the same absolute path inside the container
+            run_args+=(-v "${m}:${m}")
+        done
+    fi
+}
+
 # ---------------------------------------------------------------------------
 # SSH mode: run container with sshd, connect via ssh -A for agent forwarding
 # ---------------------------------------------------------------------------
@@ -334,6 +358,7 @@ run_claude_ssh() {
 
     # Custom .npmrc (supply chain hardening)
     setup_npmrc
+    setup_extra_mounts
 
     # Host network access
     local host_gw
@@ -505,6 +530,7 @@ run_claude() {
 
     # Custom .npmrc (supply chain hardening)
     setup_npmrc
+    setup_extra_mounts
 
     # Host network access
     local host_gw
@@ -589,6 +615,7 @@ run_shell() {
     fi
 
     setup_npmrc
+    setup_extra_mounts
 
     if [[ "$runtime" == "podman" ]]; then
         run_args+=(--security-opt "label=disable")
