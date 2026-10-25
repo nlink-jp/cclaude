@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
-## [Unreleased]
+## [0.7.0] - 2026-10-26
 
 ### Security
 
@@ -183,6 +183,9 @@ Run `make install`; it replaces `~/.config/cclaude/Dockerfile`. If your `config.
 - BATS test suite (24 tests) and shellcheck-clean.
 
 
+[0.7.0]: https://github.com/nlink-jp/cclaude/releases/tag/v0.7.0
+[0.6.0]: https://github.com/nlink-jp/cclaude/releases/tag/v0.6.0
+[0.5.0]: https://github.com/nlink-jp/cclaude/releases/tag/v0.5.0
 [0.4.1]: https://github.com/nlink-jp/cclaude/releases/tag/v0.4.1
 [0.4.0]: https://github.com/nlink-jp/cclaude/releases/tag/v0.4.0
 [0.3.3]: https://github.com/nlink-jp/cclaude/releases/tag/v0.3.3
