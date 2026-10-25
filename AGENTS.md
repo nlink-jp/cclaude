@@ -49,8 +49,13 @@ test/image/          BATS run by make test-image (builds stages with podman/dock
   `run cmd; [ "$status" -eq 1 ]`; likewise a function called as `f || …`
   runs without errexit, so make its last expression carry every check.
   bats runs under macOS's /bin/bash 3.2, where a `[[ … ]]` that is not the
-  last command of a test never fails it: use `[ … ]` or `[[ … ]] || return 1`.
-  macOS `mktemp -d` ignores `TMPDIR`, so a test cannot choose where it lands.
+  last command of a test never fails it: check output with `output_has` /
+  `output_lacks` (test_helper.bash), anything else with `[ … ]` or
+  `[[ … ]] || { echo …; return 1; }` — even on the last line, so a line added
+  after it cannot silently disable it.
+  macOS `mktemp -d` ignores `TMPDIR`, so a test cannot choose where it lands,
+  and macOS `mktemp` fills in only trailing X's (`x-XXXXXX.toml` is a literal
+  name): put test files in `$BATS_TEST_TMPDIR` instead.
 - **The Dockerfile is the only place versions live.** `go_version` /
   `node_version` and `CCC_GO_VERSION` / `CCC_NODE_VERSION` are retired: read
   only to warn that they are ignored (installs before v0.5.0 wrote

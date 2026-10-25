@@ -9,7 +9,7 @@ load test_helper
 @test "--version prints version string" {
     run bash "$CCC_SRC" --version
     [ "$status" -eq 0 ]
-    [[ "$output" =~ ^cclaude\ v[0-9]+\.[0-9]+\.[0-9] ]]
+    [[ "$output" =~ ^cclaude\ v[0-9]+\.[0-9]+\.[0-9] ]] || { echo "not a version: $output"; return 1; }
 }
 
 @test "--version, --help and --config print a stamped version with one v" {
@@ -30,21 +30,21 @@ load test_helper
 @test "--help prints usage" {
     run bash "$CCC_SRC" --help
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Containerized Claude Code" ]]
-    [[ "$output" =~ "--build" ]]
-    [[ "$output" =~ "--shell" ]]
+    output_has "Containerized Claude Code"
+    output_has "--build"
+    output_has "--shell"
 }
 
 @test "-h is alias for --help" {
     run bash "$CCC_SRC" -h
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Containerized Claude Code" ]]
+    output_has "Containerized Claude Code"
 }
 
 @test "unknown option fails" {
     run bash "$CCC_SRC" --nonexistent
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Unknown option" ]]
+    output_has "Unknown option"
 }
 
 # =========================================================================
@@ -54,13 +54,13 @@ load test_helper
 @test "CCC_RUNTIME overrides auto-detection" {
     run_ccc_dry_with_runtime podman
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "podman run" ]]
+    output_has "podman run"
 }
 
 @test "CCC_RUNTIME=docker produces docker command" {
     run_ccc_dry_with_runtime docker
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "docker run" ]]
+    output_has "docker run"
 }
 
 # =========================================================================
@@ -74,7 +74,7 @@ image = "my-image:v1"'
 
     CCC_DRY_RUN=1 run bash "$CCC_SRC" --config
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "image         = my-image:v1" ]]
+    output_has "image              = my-image:v1"
 
     teardown_config
 }
@@ -85,7 +85,7 @@ image = "from-config:v1"'
 
     CCC_IMAGE="from-env:v2" CCC_DRY_RUN=1 run bash "$CCC_SRC" --config
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "image         = from-env:v2" ]]
+    output_has "image              = from-env:v2"
 
     teardown_config
 }
@@ -93,7 +93,8 @@ image = "from-config:v1"'
 @test "missing config file uses defaults" {
     CCC_CONFIG_FILE="/nonexistent/config.toml" CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "image" ]] && [[ "$output" =~ "cclaude:latest" ]]
+    output_has "image"
+    output_has "cclaude:latest"
 }
 
 # =========================================================================
@@ -105,15 +106,15 @@ image = "from-config:v1"'
     cwd="$(pwd)"
     run_ccc_dry_with_runtime podman
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "-v ${cwd}:${cwd}" ]]
-    [[ "$output" =~ "-w ${cwd}" ]]
+    output_has "-v ${cwd}:${cwd}"
+    output_has "-w ${cwd}"
 }
 
 @test "container claude home mounted to /root/.claude" {
     run_ccc_dry_with_runtime podman
     [ "$status" -eq 0 ]
     # Container uses its own copy at ~/.config/cclaude/claude-home
-    [[ "$output" =~ "cclaude/claude-home:/root/.claude" ]]
+    output_has "cclaude/claude-home:/root/.claude"
 }
 
 # =========================================================================
@@ -123,14 +124,14 @@ image = "from-config:v1"'
 @test "ANTHROPIC_API_KEY is passed when set" {
     ANTHROPIC_API_KEY="sk-test-123" run_ccc_dry_with_runtime podman
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "ANTHROPIC_API_KEY=sk-test-123" ]]
+    output_has "ANTHROPIC_API_KEY=sk-test-123"
 }
 
 @test "no API key in command when unset" {
     unset ANTHROPIC_API_KEY
     run_ccc_dry_with_runtime podman
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "ANTHROPIC_API_KEY" ]]
+    output_lacks "ANTHROPIC_API_KEY"
 }
 
 # =========================================================================
@@ -143,8 +144,8 @@ image = "from-config:v1"'
     fi
     SSH_AUTH_SOCK="/tmp/test-ssh" run_ccc_dry_with_runtime podman
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "-v /tmp/test-ssh:/ssh-agent" ]]
-    [[ "$output" =~ "SSH_AUTH_SOCK=/ssh-agent" ]]
+    output_has "-v /tmp/test-ssh:/ssh-agent"
+    output_has "SSH_AUTH_SOCK=/ssh-agent"
 }
 
 @test "SSH_AUTH_SOCK not forwarded on macOS" {
@@ -153,14 +154,14 @@ image = "from-config:v1"'
     fi
     SSH_AUTH_SOCK="/tmp/test-ssh" run_ccc_dry_with_runtime podman
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "ssh-agent" ]]
+    output_lacks "ssh-agent"
 }
 
 @test "SSH_AUTH_SOCK not forwarded when unset" {
     unset SSH_AUTH_SOCK
     run_ccc_dry_with_runtime podman
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "ssh-agent" ]]
+    output_lacks "ssh-agent"
 }
 
 # =========================================================================
@@ -170,8 +171,8 @@ image = "from-config:v1"'
 @test "git identity passed as env vars" {
     run_ccc_dry_with_runtime podman
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "GIT_AUTHOR_NAME=" ]]
-    [[ "$output" =~ "GIT_AUTHOR_EMAIL=" ]]
+    output_has "GIT_AUTHOR_NAME="
+    output_has "GIT_AUTHOR_EMAIL="
 }
 
 # =========================================================================
@@ -181,13 +182,13 @@ image = "from-config:v1"'
 @test "podman gets label=disable security opt" {
     run_ccc_dry_with_runtime podman
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "label=disable" ]]
+    output_has "label=disable"
 }
 
 @test "docker does not get label=disable" {
     run_ccc_dry_with_runtime docker
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "label=disable" ]]
+    output_lacks "label=disable"
 }
 
 # =========================================================================
@@ -197,13 +198,13 @@ image = "from-config:v1"'
 @test "podman adds host.containers.internal" {
     run_ccc_dry_with_runtime podman
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "host.containers.internal:host-gateway" ]]
+    output_has "host.containers.internal:host-gateway"
 }
 
 @test "docker adds host.docker.internal" {
     run_ccc_dry_with_runtime docker
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "host.docker.internal:host-gateway" ]]
+    output_has "host.docker.internal:host-gateway"
 }
 
 # =========================================================================
@@ -213,38 +214,38 @@ image = "from-config:v1"'
 @test "forward_ports starts socat in container command" {
     CCC_FORWARD_PORTS="8080,11434" run_ccc_dry_with_runtime podman
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "socat TCP-LISTEN:8080" ]]
-    [[ "$output" =~ "socat TCP-LISTEN:11434" ]]
-    [[ "$output" =~ "host.containers.internal:8080" ]]
-    [[ "$output" =~ "host.containers.internal:11434" ]]
+    output_has "socat TCP-LISTEN:8080"
+    output_has "socat TCP-LISTEN:11434"
+    output_has "host.containers.internal:8080"
+    output_has "host.containers.internal:11434"
 }
 
 @test "no forward_ports runs claude directly" {
     unset CCC_FORWARD_PORTS
     CCC_CONFIG_FILE="/nonexistent" run_ccc_dry_with_runtime podman
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "socat" ]]
-    [[ "$output" =~ "claude"$ ]]
+    output_lacks "socat"
+    [[ "$output" =~ "claude"$ ]] || { echo "does not end in claude: $output"; return 1; }
 }
 
 @test "publish_ports adds -p flags" {
     CCC_PUBLISH_PORTS="3000,5173" run_ccc_dry_with_runtime podman
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "127.0.0.1:3000:3000" ]]
-    [[ "$output" =~ "127.0.0.1:5173:5173" ]]
+    output_has "127.0.0.1:3000:3000"
+    output_has "127.0.0.1:5173:5173"
 }
 
 @test "extra_mounts adds volume flags" {
     CCC_EXTRA_MOUNTS="/tmp/shared,/tmp/other" run_ccc_dry_with_runtime podman
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "-v /tmp/shared:/tmp/shared" ]]
-    [[ "$output" =~ "-v /tmp/other:/tmp/other" ]]
+    output_has "-v /tmp/shared:/tmp/shared"
+    output_has "-v /tmp/other:/tmp/other"
 }
 
 @test "forward_ports uses host.docker.internal for docker" {
     CCC_FORWARD_PORTS="8080" run_ccc_dry_with_runtime docker
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "host.docker.internal:8080" ]]
+    output_has "host.docker.internal:8080"
 }
 
 # =========================================================================
@@ -258,16 +259,16 @@ image = "from-config:v1"'
 @test "--ssh mode starts detached container with sshd" {
     CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --ssh
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "run -d --rm" ]]
-    [[ "$output" =~ "sshd -D" ]]
-    [[ "$output" =~ "authorized_keys" ]]
+    output_has "run -d --rm"
+    output_has "sshd -D"
+    output_has "authorized_keys"
 }
 
 @test "--ssh mode includes ssh -A command" {
     CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --ssh
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "ssh -A -t" ]]
-    [[ "$output" =~ "claude" ]]
+    output_has "ssh -A -t"
+    output_has "claude"
 }
 
 # =========================================================================
@@ -278,8 +279,8 @@ image = "from-config:v1"'
     CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --shell
     [ "$status" -eq 0 ]
     # Last word should be "bash", not "claude"
-    [[ "$output" =~ " bash"$ ]]
-    [[ ! "$output" =~ "claude "$ ]]
+    [[ "$output" =~ " bash"$ ]] || { echo "does not end in bash: $output"; return 1; }
+    [[ ! "$output" =~ "claude "$ ]] || { echo "ends in claude: $output"; return 1; }
 }
 
 # =========================================================================
@@ -289,19 +290,19 @@ image = "from-config:v1"'
 @test "default runs claude" {
     run_ccc_dry_with_runtime podman
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "claude"$ ]]
+    [[ "$output" =~ "claude"$ ]] || { echo "does not end in claude: $output"; return 1; }
 }
 
 @test "arguments after -- are passed to claude" {
     CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" -- -p "hello"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "claude -p hello" ]]
+    output_has "claude -p hello"
 }
 
 @test "CCC_IMAGE overrides image name" {
     CCC_IMAGE="custom:v1" run_ccc_dry_with_runtime podman
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "custom:v1 claude" ]]
+    output_has "custom:v1 claude"
 }
 
 # =========================================================================
@@ -320,19 +321,19 @@ use_repo_dockerfile() {
     use_repo_dockerfile
     CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "(pinned in ${XDG_CONFIG_HOME}/cclaude/Dockerfile)" ]]
-    [[ "$output" =~ "go            = 1.27.3" ]]
-    [[ "$output" =~ "node          = 24.22.1" ]]
-    [[ "$output" =~ "claude        = 2.1.310" ]]
-    [[ "$output" =~ "golangci_lint = 2.15.0" ]]
-    [[ ! "$output" =~ "warning" ]]
+    output_has "(pinned in ${XDG_CONFIG_HOME}/cclaude/Dockerfile)"
+    output_has "go            = 1.27.3"
+    output_has "node          = 24.22.1"
+    output_has "claude        = 2.1.310"
+    output_has "golangci_lint = 2.15.0"
+    output_lacks "warning"
 }
 
 @test "--config without a Dockerfile still succeeds" {
     mkdir -p "${BATS_TEST_TMPDIR}/empty"
     XDG_CONFIG_HOME="${BATS_TEST_TMPDIR}/empty" CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "(pinned in (not found))" ]]
+    output_has "(pinned in (not found))"
 }
 
 @test "go_version and node_version left in config.toml are ignored with a warning" {
@@ -343,10 +344,10 @@ node_version = "20"'
 
     CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "warning: go_version in ${CCC_TEST_CONFIG} is ignored: toolchain versions are pinned in the Dockerfile. Remove the line." ]]
-    [[ "$output" =~ "warning: node_version in ${CCC_TEST_CONFIG} is ignored" ]]
-    [[ "$output" =~ "go            = 1.27.3" ]]
-    [[ "$output" =~ "node          = 24.22.1" ]]
+    output_has "warning: go_version in ${CCC_TEST_CONFIG} is ignored: toolchain versions are pinned in the Dockerfile. Remove the line."
+    output_has "warning: node_version in ${CCC_TEST_CONFIG} is ignored"
+    output_has "go            = 1.27.3"
+    output_has "node          = 24.22.1"
 
     teardown_config
 }
@@ -355,10 +356,10 @@ node_version = "20"'
     use_repo_dockerfile
     CCC_GO_VERSION=1.28.0 CCC_NODE_VERSION=22 CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "warning: CCC_GO_VERSION is ignored: toolchain versions are pinned in the Dockerfile. Unset CCC_GO_VERSION." ]]
-    [[ "$output" =~ "warning: CCC_NODE_VERSION is ignored" ]]
-    [[ ! "$output" =~ "Remove the line" ]]
-    [[ "$output" =~ "node          = 24.22.1" ]]
+    output_has "warning: CCC_GO_VERSION is ignored: toolchain versions are pinned in the Dockerfile. Unset CCC_GO_VERSION."
+    output_has "warning: CCC_NODE_VERSION is ignored"
+    output_lacks "Remove the line"
+    output_has "node          = 24.22.1"
 }
 
 @test "commented-out toolchain keys do not warn" {
@@ -369,7 +370,7 @@ node_version = "20"'
 
     CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "warning" ]]
+    output_lacks "warning"
 
     teardown_config
 }
@@ -378,7 +379,7 @@ node_version = "20"'
     use_repo_dockerfile
     CCC_CONFIG_FILE="${BATS_TEST_DIRNAME}/../config.toml.example" CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "warning" ]]
+    output_lacks "warning"
 }
 
 @test "--build warns about a retired key and passes no version build args" {
@@ -392,9 +393,9 @@ node_version = "20"'
 
     PATH="${stub}:${PATH}" CCC_RUNTIME=podman run bash "$CCC_SRC" --build
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "warning: node_version in ${CCC_TEST_CONFIG} is ignored" ]]
-    [[ "$output" =~ "podman build --no-cache -t cclaude:latest" ]]
-    [[ ! "$output" =~ "--build-arg" ]]
+    output_has "warning: node_version in ${CCC_TEST_CONFIG} is ignored"
+    output_has "podman build --no-cache -t cclaude:latest"
+    output_lacks "--build-arg"
 
     teardown_config
 }

@@ -89,7 +89,7 @@ wrong_hash_fails() {
     run "$RUNTIME" run --rm "${TEST_TAG}:image" bash -lc \
         'go version && node --version && npm --version && uv --version && claude --version && gh --version && golangci-lint --version && apt-get update -qq && apt list --upgradable 2>/dev/null | tail -n +2'
     [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-    [[ "$output" == *"(Claude Code)"* ]]
+    [[ "$output" == *"(Claude Code)"* ]] || { echo "claude did not run: $output"; return 1; }
     # apt list prints nothing after its header when every package is current.
-    [[ "$output" != *"[upgradable from"* ]]
+    [[ "$output" != *"[upgradable from"* ]] || { echo "updates pending: $output"; return 1; }
 }
