@@ -290,129 +290,154 @@ image = "from-config:v1"'
 }
 
 # =========================================================================
-# Toolchain versions
+# Toolchain versions (pinned in the Dockerfile; config keys retired)
 # =========================================================================
 
-@test "default node_version is 24 and prints no warning" {
+# Point the config dir at a copy of the repository's Dockerfile, so tests never
+# read the one installed in the user's ~/.config/cclaude.
+use_repo_dockerfile() {
+    mkdir -p "${BATS_TEST_TMPDIR}/xdg/cclaude"
+    cp "${BATS_TEST_DIRNAME}/../Dockerfile" "${BATS_TEST_TMPDIR}/xdg/cclaude/Dockerfile"
+    export XDG_CONFIG_HOME="${BATS_TEST_TMPDIR}/xdg"
+}
+
+@test "--config lists the versions pinned in the Dockerfile and warns about nothing" {
+    use_repo_dockerfile
     CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "node_version  = 24" ]]
+    [[ "$output" =~ "(pinned in ${XDG_CONFIG_HOME}/cclaude/Dockerfile)" ]]
+    [[ "$output" =~ "go            = 1.27.3" ]]
+    [[ "$output" =~ "node          = 24.22.1" ]]
+    [[ "$output" =~ "claude        = 2.1.310" ]]
+    [[ "$output" =~ "golangci_lint = 2.15.0" ]]
     [[ ! "$output" =~ "warning" ]]
 }
 
-@test "node_version older than the default warns" {
-    setup_config '[toolchain]
-node_version = "20"'
-
-    CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
+@test "--config without a Dockerfile still succeeds" {
+    mkdir -p "${BATS_TEST_TMPDIR}/empty"
+    XDG_CONFIG_HOME="${BATS_TEST_TMPDIR}/empty" CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "node_version  = 20" ]]
-    [[ "$output" =~ "warning: node_version = 20 is older than the default Node.js line (24)" ]]
-
-    teardown_config
+    [[ "$output" =~ "(pinned in (not found))" ]]
 }
 
-@test "CCC_NODE_VERSION older than the default warns" {
-    CCC_NODE_VERSION=22 CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "warning: node_version = 22 is older" ]]
-}
-
-@test "node_version at or above the default does not warn" {
-    CCC_NODE_VERSION=26 CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "node_version  = 26" ]]
-    [[ ! "$output" =~ "warning" ]]
-}
-
-@test "non-numeric node_version does not warn or fail" {
-    CCC_NODE_VERSION=lts CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
-    [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "warning" ]]
-}
-
-@test "config.toml.example leaves toolchain versions to the defaults" {
-    CCC_CONFIG_FILE="${BATS_TEST_DIRNAME}/../config.toml.example" CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "go_version    = 1.27.3" ]]
-    [[ "$output" =~ "node_version  = 24" ]]
-    [[ ! "$output" =~ "warning" ]]
-}
-
-@test "default go_version is 1.27.3" {
-    CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "go_version    = 1.27.3" ]]
-}
-
-@test "go_version older than the default warns" {
+@test "go_version and node_version left in config.toml are ignored with a warning" {
+    use_repo_dockerfile
     setup_config '[toolchain]
 go_version = "1.23.4"
 node_version = "20"'
 
     CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "warning: go_version = 1.23.4 is older than the default Go version (1.27.3)" ]]
-    [[ "$output" =~ "warning: node_version = 20 is older than the default Node.js line (24)" ]]
-    [[ "$output" =~ "Remove node_version from ${CCC_TEST_CONFIG}" ]]
+    [[ "$output" =~ "warning: go_version in ${CCC_TEST_CONFIG} is ignored: toolchain versions are pinned in the Dockerfile. Remove the line." ]]
+    [[ "$output" =~ "warning: node_version in ${CCC_TEST_CONFIG} is ignored" ]]
+    [[ "$output" =~ "go            = 1.27.3" ]]
+    [[ "$output" =~ "node          = 24.22.1" ]]
 
     teardown_config
 }
 
-@test "warning from an environment variable says to unset it" {
-    CCC_NODE_VERSION=20 CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
+@test "CCC_GO_VERSION and CCC_NODE_VERSION are ignored with a warning to unset them" {
+    use_repo_dockerfile
+    CCC_GO_VERSION=1.28.0 CCC_NODE_VERSION=22 CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Unset CCC_NODE_VERSION to follow the default" ]]
-    [[ ! "$output" =~ "Remove node_version" ]]
+    [[ "$output" =~ "warning: CCC_GO_VERSION is ignored: toolchain versions are pinned in the Dockerfile. Unset CCC_GO_VERSION." ]]
+    [[ "$output" =~ "warning: CCC_NODE_VERSION is ignored" ]]
+    [[ ! "$output" =~ "Remove the line" ]]
+    [[ "$output" =~ "node          = 24.22.1" ]]
 }
 
-@test "--build warns about an old toolchain and passes the versions as build args" {
+@test "commented-out toolchain keys do not warn" {
+    use_repo_dockerfile
+    setup_config '[toolchain]
+# go_version = "1.27.3"
+# node_version = "24"'
+
+    CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "warning" ]]
+
+    teardown_config
+}
+
+@test "config.toml.example sets no retired toolchain key" {
+    use_repo_dockerfile
+    CCC_CONFIG_FILE="${BATS_TEST_DIRNAME}/../config.toml.example" CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "warning" ]]
+}
+
+@test "--build warns about a retired key and passes no version build args" {
     local stub="${BATS_TEST_TMPDIR}/bin"
     mkdir -p "$stub"
     printf '#!/bin/sh\nprintf "podman %%s\\n" "$*"\n' > "${stub}/podman"
     chmod +x "${stub}/podman"
-    mkdir -p "${BATS_TEST_TMPDIR}/xdg/cclaude"
-    touch "${BATS_TEST_TMPDIR}/xdg/cclaude/Dockerfile"
+    use_repo_dockerfile
     setup_config '[toolchain]
 node_version = "20"'
 
-    XDG_CONFIG_HOME="${BATS_TEST_TMPDIR}/xdg" PATH="${stub}:${PATH}" CCC_RUNTIME=podman run bash "$CCC_SRC" --build
+    PATH="${stub}:${PATH}" CCC_RUNTIME=podman run bash "$CCC_SRC" --build
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "warning: node_version = 20 is older" ]]
-    [[ "$output" =~ "--build-arg NODE_VERSION=20" ]]
-    [[ "$output" =~ "--build-arg GO_VERSION=1.27.3" ]]
+    [[ "$output" =~ "warning: node_version in ${CCC_TEST_CONFIG} is ignored" ]]
+    [[ "$output" =~ "podman build --no-cache -t cclaude:latest" ]]
+    [[ ! "$output" =~ "--build-arg" ]]
 
     teardown_config
 }
 
-@test "older patch of the default Go line warns" {
-    CCC_GO_VERSION=1.27.0 CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "warning: go_version = 1.27.0 is older" ]]
+# =========================================================================
+# Dockerfile: every download pinned and hash-checked
+# =========================================================================
+
+DOCKERFILE="${BATS_TEST_DIRNAME}/../Dockerfile"
+TOOLS="GO NODE UV CLAUDE GH GOLANGCI_LINT"
+
+@test "Dockerfile pins the base image by its digest and builds every stage from it" {
+    grep -Eqx 'ARG BASE_IMAGE=debian:bookworm-slim@sha256:[0-9a-f]{64}' "$DOCKERFILE"
+    # Every FROM is the pinned base or an earlier stage.
+    run grep -E '^FROM ' "$DOCKERFILE"
+    local line
+    for line in "${lines[@]}"; do
+        [[ "$line" =~ ^FROM\ (\$\{BASE_IMAGE\}|fetch)(\ AS\ [a-z-]+)?$ ]] || {
+            echo "unpinned: $line"
+            return 1
+        }
+    done
 }
 
-@test "newer go_version does not warn (numeric, not lexical, compare)" {
-    CCC_GO_VERSION=1.100.0 CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
-    [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "warning" ]]
+@test "Dockerfile pins each tool to an exact version and an amd64 and arm64 SHA256" {
+    local t
+    for t in $TOOLS; do
+        grep -Eqx "ARG ${t}_VERSION=[0-9]+(\.[0-9]+)+" "$DOCKERFILE" || { echo "no version: $t"; return 1; }
+        grep -Eqx "ARG ${t}_SHA256_AMD64=[0-9a-f]{64}" "$DOCKERFILE" || { echo "no amd64 hash: $t"; return 1; }
+        grep -Eqx "ARG ${t}_SHA256_ARM64=[0-9a-f]{64}" "$DOCKERFILE" || { echo "no arm64 hash: $t"; return 1; }
+    done
+    # No other ARG *_VERSION, so a new download cannot skip the list above.
+    [ "$(grep -Ec '^ARG [A-Z_]+_VERSION=' "$DOCKERFILE")" -eq 6 ]
 }
 
-@test "go_version 1.28.0 does not warn" {
-    CCC_GO_VERSION=1.28.0 CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
-    [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "warning" ]]
+@test "Dockerfile checks every download against its SHA256 and runs no fetched script" {
+    # One curl per tool, each writing a file that sha256sum -c checks next.
+    [ "$(grep -c 'curl -' "$DOCKERFILE")" -eq 6 ]
+    [ "$(grep -c 'curl -fsSLo ' "$DOCKERFILE")" -eq 6 ]
+    [ "$(grep -c 'sha256sum -c -' "$DOCKERFILE")" -eq 6 ]
+    run grep -A1 'curl -fsSLo ' "$DOCKERFILE"
+    local i
+    for (( i = 0; i < ${#lines[@]}; i++ )); do
+        if [[ "${lines[i]}" == *"curl -fsSLo "* ]]; then
+            # Exactly `… | sha256sum -c - \`: a trailing `|| true` would forgive it.
+            [[ "${lines[i+1]}" =~ \|\ sha256sum\ -c\ -\ \\$ ]] || { echo "unchecked: ${lines[i]}"; return 1; }
+        fi
+    done
+    # Nothing piped into a shell, nothing that floats. (`! grep` would not
+    # fail the test: bash ignores errexit for a negated command.)
+    run grep -Eq '\|[[:space:]]*(ba|z|da)?sh([[:space:]]|$)' "$DOCKERFILE"
+    [ "$status" -eq 1 ]
+    run grep -Eiq '/latest|/HEAD/|releases/latest|setup_[0-9]+\.x' "$DOCKERFILE"
+    [ "$status" -eq 1 ]
 }
 
-@test "non-numeric go_version does not warn or fail" {
-    CCC_GO_VERSION=1.28rc1 CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
-    [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "warning" ]]
-}
-
-@test "Dockerfile ARG defaults match the script defaults" {
-    local go node
-    go="$(sed -n 's/^CCC_DEFAULT_GO_VERSION="\(.*\)"$/\1/p' "$CCC_SRC")"
-    node="$(sed -n 's/^CCC_DEFAULT_NODE_VERSION="\(.*\)"$/\1/p' "$CCC_SRC")"
-    grep -qx "ARG GO_VERSION=${go}" "${BATS_TEST_DIRNAME}/../Dockerfile"
-    grep -qx "ARG NODE_VERSION=${node}" "${BATS_TEST_DIRNAME}/../Dockerfile"
+@test "Dockerfile upgrades Debian packages in the final image so a rebuild takes their updates" {
+    # From the last FROM on: the image itself, not a download stage.
+    awk '/^FROM /{buf=""} {buf=buf $0 "\n"} END{printf "%s", buf}' "$DOCKERFILE" \
+        | grep -q 'apt-get update && apt-get upgrade -y'
 }

@@ -5,10 +5,6 @@ set -euo pipefail
 
 CCC_VERSION="0.1.0"
 CCC_DEFAULT_IMAGE="cclaude:latest"
-# Supported releases: https://go.dev/doc/devel/release
-CCC_DEFAULT_GO_VERSION="1.27.3"
-# A supported Node.js LTS line: https://github.com/nodejs/release#release-schedule
-CCC_DEFAULT_NODE_VERSION="24"
 CCC_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cclaude"
 CCC_CONFIG_FILE="${CCC_CONFIG_FILE:-${CCC_CONFIG_DIR}/config.toml}"
 
@@ -142,46 +138,40 @@ detect_runtime() {
     fi
 }
 
-# version_lt A B — true when dotted numeric version A is lower than B
-# (1.23.4 < 1.27.3, 20 < 24). False when either is not dotted numeric.
-version_lt() {
-    local a="$1" b="$2"
-    [[ "$a" =~ ^[0-9]+(\.[0-9]+)*$ && "$b" =~ ^[0-9]+(\.[0-9]+)*$ ]] || return 1
-    local -a av bv
-    IFS=. read -r -a av <<< "$a"
-    IFS=. read -r -a bv <<< "$b"
-    local i n=$(( ${#av[@]} > ${#bv[@]} ? ${#av[@]} : ${#bv[@]} ))
-    for (( i = 0; i < n; i++ )); do
-        local x=$(( 10#${av[i]:-0} )) y=$(( 10#${bv[i]:-0} ))
-        (( x < y )) && return 0
-        (( x > y )) && return 1
+# retired_toolchain_warnings — print one warning message per line for each
+# go_version / node_version still set in config.toml or the environment.
+# Since v0.6.0 the toolchain versions are pinned, with their SHA256, in the
+# Dockerfile: a version cannot be overridden without its hashes, so these
+# settings are ignored. Prints nothing when none is set.
+retired_toolchain_warnings() {
+    local key env_var
+    for key in go_version node_version; do
+        env_var="CCC_$(printf '%s' "$key" | tr '[:lower:]' '[:upper:]')"
+        if [[ -n "${!env_var:-}" ]]; then
+            printf '%s is ignored: toolchain versions are pinned in the Dockerfile. Unset %s.\n' \
+                "$env_var" "$env_var"
+        fi
+        if [[ -n "$(config_get toolchain "$key" "")" ]]; then
+            printf '%s in %s is ignored: toolchain versions are pinned in the Dockerfile. Remove the line.\n' \
+                "$key" "$CCC_CONFIG_FILE"
+        fi
     done
-    return 1
 }
 
-# toolchain_warning KEY LABEL ENV_VAR VERSION DEFAULT — print a warning message
-# when VERSION is older than DEFAULT (e.g. a config.toml written by an earlier
-# install). Prints nothing otherwise.
-toolchain_warning() {
-    local key="$1" label="$2" env_var="$3" ver="$4" default="$5"
-    version_lt "$ver" "$default" || return 0
-    local fix
-    if [[ -n "${!env_var:-}" ]]; then
-        fix="Unset ${env_var}"
-    else
-        fix="Remove ${key} from ${CCC_CONFIG_FILE}"
-    fi
-    printf '%s = %s is older than the default %s (%s) and may no longer get security fixes. %s to follow the default, then run cclaude --build.' \
-        "$key" "$ver" "$label" "$default" "$fix"
-}
-
-# warn_old_toolchains GO_VERSION NODE_VERSION
-warn_old_toolchains() {
+warn_retired_toolchain_keys() {
     local msg
-    msg="$(toolchain_warning go_version "Go version" CCC_GO_VERSION "$1" "$CCC_DEFAULT_GO_VERSION")"
-    if [[ -n "$msg" ]]; then warn "$msg"; fi
-    msg="$(toolchain_warning node_version "Node.js line" CCC_NODE_VERSION "$2" "$CCC_DEFAULT_NODE_VERSION")"
-    if [[ -n "$msg" ]]; then warn "$msg"; fi
+    while IFS= read -r msg; do
+        warn "$msg"
+    done < <(retired_toolchain_warnings)
+}
+
+# dockerfile_pins DOCKERFILE — print "name = version" for each tool version
+# the Dockerfile pins (its ARG <NAME>_VERSION=<version> lines).
+dockerfile_pins() {
+    sed -n 's/^ARG \([A-Z_]*\)_VERSION=\(.*\)$/\1 \2/p' "$1" \
+        | while read -r name ver; do
+            printf '%-14s= %s\n' "$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]')" "$ver"
+        done
 }
 
 # ---------------------------------------------------------------------------
@@ -216,15 +206,10 @@ build_image() {
     local context_dir
     context_dir="$(dirname "$dockerfile")"
 
-    local go_ver node_ver
-    go_ver="$(resolve CCC_GO_VERSION toolchain go_version "$CCC_DEFAULT_GO_VERSION")"
-    node_ver="$(resolve CCC_NODE_VERSION toolchain node_version "$CCC_DEFAULT_NODE_VERSION")"
-    warn_old_toolchains "$go_ver" "$node_ver"
+    warn_retired_toolchain_keys
 
     printf 'cclaude: building image %s ...\n' "$image" >&2
     "$runtime" build --no-cache \
-        --build-arg "GO_VERSION=${go_ver}" \
-        --build-arg "NODE_VERSION=${node_ver}" \
         -t "$image" \
         -f "$dockerfile" \
         "$context_dir"
@@ -688,10 +673,15 @@ show_config() {
     image="$(resolve CCC_IMAGE container image "$CCC_DEFAULT_IMAGE")"
     host_claude_home="$(resolve CCC_CLAUDE_HOME paths claude_home "$HOME/.claude")"
     host_claude_home="${host_claude_home/#\~/$HOME}"
-    local go_ver node_ver
-    go_ver="$(resolve CCC_GO_VERSION toolchain go_version "$CCC_DEFAULT_GO_VERSION")"
-    node_ver="$(resolve CCC_NODE_VERSION toolchain node_version "$CCC_DEFAULT_NODE_VERSION")"
-    warn_old_toolchains "$go_ver" "$node_ver"
+    local dockerfile pins
+    dockerfile="$(locate_dockerfile 2>/dev/null)" || dockerfile=""
+    if [[ -n "$dockerfile" ]]; then
+        pins="$(dockerfile_pins "$dockerfile")"
+    else
+        dockerfile="(not found)"
+        pins=""
+    fi
+    warn_retired_toolchain_keys
 
     cat <<EOF
 cclaude v${CCC_VERSION}
@@ -705,9 +695,8 @@ container_home     = ${CCC_CONTAINER_CLAUDE_HOME}
 config_file        = ${CCC_CONFIG_FILE}
 project_dir        = $(pwd)
 
-[toolchain] (used at image build time)
-go_version    = ${go_ver}
-node_version  = ${node_ver}
+[toolchain] (pinned in ${dockerfile})
+${pins}
 
 [network]
 forward_ports = $(

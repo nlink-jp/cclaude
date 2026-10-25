@@ -25,17 +25,9 @@ mode = "direct"
 # Override: CCC_EXTRA_MOUNTS (comma-separated)
 # extra_mounts = ["/Users/me/works/shared-lib", "/Users/me/.github"]
 
-[toolchain]
-# Toolchain versions used when building the image (cclaude --build).
-# Leave these commented out to follow cclaude's defaults, which move to
-# supported lines in new releases. A value set here stays as written.
-# go_version takes an exact Go release; use a supported one:
-# https://go.dev/doc/devel/release
-# node_version takes a Node.js major line (NodeSource); use a supported one:
-# https://github.com/nodejs/release#release-schedule
-# Override: CCC_GO_VERSION, CCC_NODE_VERSION
-# go_version = "1.27.3"
-# node_version = "24"
+# Toolchain versions are pinned, with their SHA256, in the Dockerfile
+# (cclaude --config lists them). The [toolchain] go_version / node_version
+# keys and CCC_GO_VERSION / CCC_NODE_VERSION are no longer read (v0.6.0).
 
 [network]
 # Ports forwarded from container localhost to host localhost via socat.

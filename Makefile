@@ -4,7 +4,7 @@ VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev
 PREFIX  ?= /usr/local
 DESTDIR ?=
 
-.PHONY: build install uninstall image-build test lint check clean help
+.PHONY: build install uninstall image-build test test-image lint check clean help
 
 ## build: Build script and assets to dist/
 build:
@@ -40,11 +40,17 @@ uninstall:
 
 ## image-build: Build the container image
 image-build:
-	$(shell command -v podman 2>/dev/null || command -v docker 2>/dev/null) build -t cclaude:latest -f Dockerfile .
+	$(shell command -v podman 2>/dev/null || command -v docker 2>/dev/null) build --no-cache -t cclaude:latest -f Dockerfile .
 
 ## test: Run shellcheck + BATS
 test: lint
 	bats test/
+
+## test-image: Build the Dockerfile: a wrong SHA256 must fail each download,
+##   every pinned SHA256 must match on amd64 and arm64, and the full image
+##   must build and run each tool. Needs podman/docker and network (~2 GB).
+test-image:
+	bats test/image/
 
 ## lint: Run shellcheck
 lint:

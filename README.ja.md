@@ -9,7 +9,7 @@ Claude Code の状態（`~/.claude`）はホスト上に永続化されます。
 - **セキュリティ隔離**: Claude Code はコンテナ内で実行され、マウントされたプロジェクトディレクトリのみアクセス可能
 - **メモリ永続化**: `~/.claude/`（プロジェクトメモリ、設定、会話履歴）はコンテナ再起動後も保持される
 - **サブスクリプション & API キー対応**: Claude サブスクリプション（OAuth）と API キー認証の両方に対応
-- **プリインストール済みツールチェーン**: Go、Node.js、Python（uv）がすぐに使える
+- **プリインストール済みツールチェーン**: Go、Node.js、Python（uv）がすぐに使える。どれも正確なバージョンに固定し、上流の SHA256 と照合して入れる
 - **サンドボックスの問題を回避**: コンテナレベルの隔離により、サンドボックスモードとビルドツールの非互換性を解消
 - **自動検出**: Podman または Docker を自動検出（Podman 優先）
 - **カスタマイズ可能**: TOML 設定ファイル + 環境変数オーバーライド。Dockerfile を拡張してツールチェーンを追加可能
@@ -119,10 +119,6 @@ image = "cclaude:latest"
 # forward_ports = [8080, 11434]    # ホスト→コンテナ (socat)
 # publish_ports = [3000, 5173]     # コンテナ→ホスト (-p)
 
-[toolchain]
-# go_version = "1.27.3"   # 既定値に従うならコメントアウトのまま
-# node_version = "24"     # Node.js のメジャー系列（NodeSource）
-
 [paths]
 claude_home = "~/.claude"
 ```
@@ -138,22 +134,20 @@ claude_home = "~/.claude"
 | `CCC_FORWARD_PORTS` | ホスト→コンテナ転送ポート（例: `8080,11434`） | — |
 | `CCC_PUBLISH_PORTS` | コンテナ→ホスト公開ポート（例: `3000,5173`） | — |
 | `CCC_CLAUDE_HOME` | Claude ホームディレクトリ | `~/.claude` |
-| `CCC_GO_VERSION` | イメージビルド時の Go リリース | `1.27.3` |
-| `CCC_NODE_VERSION` | イメージビルド時の Node.js メジャー系列 | `24` |
 | `CCC_DRY_RUN=1` | コンテナコマンドを実行せず表示のみ | — |
 
 ### ツールチェーンのバージョン
 
-`config.toml` や環境変数で指定したバージョンは、書かれたとおりに使われます。cclaude の新しいリリースが変えるのは既定値だけです。
+Dockerfile は各ツールを正確なバージョンに固定し、上流の作者が amd64 と arm64 について公開している SHA256 を併記しています（[セキュリティ: イメージビルドがダウンロードするもの](#セキュリティ-イメージビルドがダウンロードするもの)）。これを動かすのは cclaude の新しいリリースです。`cclaude --config` は、手元の Dockerfile が固定しているバージョンを表示します。
 
-以前の `make install` は `config.toml` に `go_version = "1.23.4"` と `node_version = "20"` を書き込んでいました。どちらもサポートが終了しており、セキュリティ修正はもう出ません（Node.js 20 は 2026-04-30 に終了）。`config.toml` が既定値より古いバージョンを指定していると、`cclaude --build` と `cclaude --config` が警告を出します。それらの行を削除するかコメントアウトしてから、リビルドしてください:
+v0.6.0 から、`[toolchain]` の `go_version` と `node_version`、および `CCC_GO_VERSION` / `CCC_NODE_VERSION` は読まれません。ハッシュを伴わずにバージョンだけを変えることはできないためです。設定が残っていると `cclaude --build` と `cclaude --config` が警告を出し、ビルドは固定されたバージョンで行われます。以前の `make install` は `config.toml` に `go_version = "1.23.4"` と `node_version = "20"` を書き込んでいました。それらの行を削除してから、リビルドしてください:
 
 ```bash
-cclaude --config   # [toolchain] の go_version と node_version を確認
+cclaude --config   # 無視される設定ごとに警告が出る
 cclaude --build
 ```
 
-`go_version` には Go の正確なリリースを、`node_version` には NodeSource のメジャー系列を指定します。サポート中のものを選んでください（[Go リリース履歴](https://go.dev/doc/devel/release)、[Node.js リリーススケジュール](https://github.com/nodejs/release#release-schedule)）。
+別のバージョンでビルドするには、`~/.config/cclaude/Dockerfile` のそのツールの `ARG` 行を書き換えます。バージョンと 2 つのハッシュを、行の上のコメントにあるチェックサムファイルから写してください。`make install` はこのファイルをリリースの Dockerfile で置き換えます。
 
 ## 仕組み
 
@@ -259,13 +253,29 @@ cclaude --ssh
 2. パッケージを追加（例: Rust、Java、Ruby）
 3. リビルド: `cclaude --build`
 
+追加したものはリビルドのたびにダウンロードされます。Dockerfile が自身のツールを入れるのと同じやり方で取得してください。そうすれば、誰も確かめていないファイルをリビルドが取り込むことはありません: 正確なバージョンを指定し、作者が公開している SHA256 を、使う前に `sha256sum -c` で照合します。インストールスクリプトをシェルにパイプする（`curl … | sh`）と、この照合が抜けます。
+
 ### 例: Rust を追加
 
 ```dockerfile
-# Dockerfile に追記
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+# Dockerfile に追記。rustup-init を正確なバージョンで入れる。各ハッシュは
+# static.rust-lang.org/rustup/archive/ で隣に公開されている rustup-init.sha256
+ARG RUSTUP_VERSION=1.29.2
+ARG RUSTUP_SHA256_AMD64=5be191e8c70a5007074254cb74d78dbfdd25cd5a61c27de7b8e5410122ec24f4
+ARG RUSTUP_SHA256_ARM64=a9c168dbea81a84671c6b7a5c1795cb0eb699020110d107ddfca427bd797e697
+RUN case "$(dpkg --print-architecture)" in \
+         amd64) sha="$RUSTUP_SHA256_AMD64"; triple=x86_64-unknown-linux-gnu ;; \
+         arm64) sha="$RUSTUP_SHA256_ARM64"; triple=aarch64-unknown-linux-gnu ;; \
+         *) echo "unsupported architecture" >&2; exit 1 ;; \
+       esac \
+    && curl -fsSLo /tmp/rustup-init "https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/${triple}/rustup-init" \
+    && echo "${sha}  /tmp/rustup-init" | sha256sum -c - \
+    && chmod +x /tmp/rustup-init && /tmp/rustup-init -y --no-modify-path --default-toolchain 1.99.1 \
+    && rm /tmp/rustup-init
 ENV PATH="/root/.cargo/bin:${PATH}"
 ```
+
+`--default-toolchain` で Rust のリリースも固定します。指定しないと、リビルドのたびにその日の `stable` が入ります。rustup はツールチェーンのファイルを、そのリリースのチャンネルマニフェストにある SHA256 と照合します。マニフェストはビルド中に `static.rust-lang.org` から取得されます。
 
 ### 例: Java（Eclipse Temurin）を追加
 
@@ -285,7 +295,8 @@ dist/cclaude        ← ビルド成果物（make build で生成）
 Dockerfile          ← コンテナイメージ定義
 config.toml.example ← デフォルト設定テンプレート
 npmrc.example       ← npm セキュリティ強化テンプレート
-test/               ← BATS テストスイート
+test/               ← BATS テストスイート（make test）
+test/image/         ← イメージのテスト: Dockerfile をビルドする（make test-image）
 ```
 
 ### 前提ツール
@@ -308,6 +319,10 @@ make build        # src/cclaude.sh → dist/cclaude（バージョン注入付�
 make install      # /usr/local/bin にインストール
 make image-build  # コンテナイメージをビルド
 make test         # shellcheck + BATS テスト
+make test-image   # Dockerfile をビルド: 誤った SHA256 なら各ダウンロードが失敗すること、
+                  # 固定した SHA256 が amd64 と arm64 で一致すること、イメージ全体が
+                  # ビルドでき各ツールが動くことを確かめる（podman/docker とネット
+                  # ワークが必要、約 2 GB をダウンロード）
 make lint         # shellcheck のみ
 make clean        # dist/ を削除
 ```
@@ -343,21 +358,27 @@ SELinux 環境でのバインドマウントが正しく動作します。
 
 ### セキュリティ: イメージビルドがダウンロードするもの
 
-`cclaude --build` は `--no-cache` でビルドし、Dockerfile が `apt-get upgrade` を実行するため、リビルドのたびに Debian のセキュリティ更新が入ります。それ以外のツールはビルド中にダウンロードされ、そのうちいくつかは上流の作者が公開する SHA256 と照合されて**いません**:
+ダウンロードするものはすべて固定され、各ファイルは展開する前に、上流の作者が公開している SHA256 と照合されます:
 
-| ツール | 取得方法 | 検証するもの |
-|--------|----------|--------------|
-| Debian パッケージ | `debian:bookworm-slim`（タグ指定でダイジェスト固定なし）→ apt | apt の署名 |
-| Go | `go_version` の `go.dev/dl` tarball | なし（SHA256 照合なし） |
-| Node.js | NodeSource の `setup_<系列>.x` スクリプトを `bash` にパイプ → NodeSource の apt リポジトリからその系列の最新 `nodejs` | スクリプト: なし。署名鍵: HTTPS のみ。パッケージ: その鍵による apt の署名 |
-| uv | `astral.sh/uv/install.sh` を `sh` にパイプ（最新版） | スクリプト: なし。スクリプトが自身に書かれた SHA256 でアーカイブを照合 |
-| Claude Code | `claude.ai/install.sh` を `bash` にパイプ（最新版） | スクリプト: なし。スクリプトが同じサーバのリリースマニフェストの SHA256 でバイナリを照合 |
-| GitHub CLI | GitHub API が最新と返す版のリリース tarball | なし |
-| golangci-lint | リポジトリの `HEAD` にある `install.sh` を `sh` にパイプ（最新リリース） | スクリプト: なし。スクリプトがリリースの checksums ファイルでアーカイブを照合 |
+| 対象 | 固定先 | 照合するもの |
+|------|--------|--------------|
+| ベースイメージ | `debian:bookworm-slim` の multi-arch インデックスのダイジェスト（amd64 と arm64） | ダイジェスト |
+| Debian パッケージ | そのベースの Debian リリース。`apt-get upgrade` がその更新を取り込む | apt の署名 |
+| Go | `go.dev/dl` の正確なリリース | `go.dev/dl/?mode=json` の SHA256 |
+| Node.js | `nodejs.org/dist` の公式ビルドの正確なリリース | そのリリースの `SHASUMS256.txt` |
+| uv | GitHub の正確なリリース | そのリリースの `sha256.sum` |
+| Claude Code | `downloads.claude.ai` のネイティブバイナリの正確なリリース | そのリリースの `manifest.json` にある checksum |
+| GitHub CLI | GitHub の正確なリリース | そのリリースの `gh_<version>_checksums.txt` |
+| golangci-lint | GitHub の正確なリリース | そのリリースの `golangci-lint-<version>-checksums.txt` |
 
-つまりリビルドは、その時点でこれらの上流が配っているものを何でも取り込みえます。それが問題になる用途では、手元の Dockerfile（`~/.config/cclaude/Dockerfile`）でバージョンを固定し SHA256 の照合を加えてください。
+amd64 と arm64 のハッシュは Dockerfile に書かれており、一致しなければ `sha256sum -c` がビルドを失敗させます。`make test-image` は、各ダウンロードを誤ったハッシュでビルドして失敗することを確かめ、固定したハッシュすべてを両アーキテクチャの実ファイルと照合し、イメージ全体をビルドします。
 
-未対応: ベースイメージをダイジェストで固定し、各ツールを正確なバージョンで上流の SHA256 と照合して入れること（ハッシュロック）。これをやると `go_version` と `node_version` が「ハッシュを伴う正確なバージョン」に変わるため、独自の設計を立てて後のリリースで扱います。
+つまり `cclaude --build`（`--no-cache`）はリリースを再現し、自動的に取り込むのは apt が署名を検証する Debian の更新だけです。新しいベースイメージや新しいバージョンのツールは、cclaude の新しいリリースで届きます。セキュリティ修正も同じで、Node.js や Go の修正がイメージに入るのは、リビルドしたときではなく、リリースが固定先を動かしたときです。
+
+対象外のもの:
+- ハッシュは、ファイルと同じサーバにあるチェックサムファイルから写したものです。Node.js の `SHASUMS256.txt` の GPG 署名と、Claude Code のマニフェストの署名は検証していません。
+- 作業中にツールが取得するパッケージ（npm、Go モジュール、uv）はイメージビルドの外です。npm については `npmrc.example` を参照してください。
+- `--no-cache` のリビルドのたびに、前のイメージがタグなしで残ります。`podman image prune`（または `docker image prune`）で削除してください。
 
 ## ライセンス
 

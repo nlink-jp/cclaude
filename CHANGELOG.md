@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [Unreleased]
+
+### Security
+
+- **Every download in the image build is pinned and checked against its upstream SHA256.** The base image is pinned by the multi-arch index digest of `debian:bookworm-slim`. Go, Node.js, uv, Claude Code, GitHub CLI and golangci-lint are each installed at an exact version, and `sha256sum -c` checks the file against the SHA256 its upstream author publishes (amd64 and arm64 hashes are both in the Dockerfile) before it is unpacked; a mismatch fails the build. No install script is piped into a shell any more, and nothing is fetched as "latest" or from `HEAD`. A rebuild therefore reproduces the release and takes only Debian's updates (`apt-get upgrade`, apt-signed) on its own. Pinned: Go 1.27.3, Node.js 24.22.1, uv 0.13.5, Claude Code 2.1.310, GitHub CLI 2.103.2, golangci-lint 2.15.0.
+- Node.js now comes from the official `nodejs.org` build (`/usr/local/bin/node`) instead of the NodeSource apt repository, whose setup script was piped into `bash` and whose signing key was fetched without a fingerprint check.
+
+### Changed
+
+- **Breaking: `go_version` / `node_version` under `[toolchain]` and `CCC_GO_VERSION` / `CCC_NODE_VERSION` are no longer read.** A version cannot be changed without its hashes. If one is still set, `cclaude --build` and `cclaude --config` warn that it is ignored and the build uses the pinned versions. `--build` passes no `--build-arg`.
+- `cclaude --config` lists the versions the Dockerfile pins instead of `go_version` / `node_version`.
+- The Dockerfile fetches each tool in its own build stage; the image takes only the unpacked files.
+- A security fix in a tool (Node.js, Go, …) now reaches the image with a cclaude release that moves its pin, not with a rebuild.
+- README: the Rust example in "Customizing the Image" downloads `rustup-init` at an exact version, checks its SHA256 and pins the Rust release, instead of piping `sh.rustup.rs` into `sh`.
+- `make image-build` builds with `--no-cache`, like `cclaude --build`, so it takes Debian's updates.
+
+### Added
+
+- `make test-image`: builds each download stage with a wrong SHA256 and expects the build to fail, checks every pinned SHA256 against the real file on linux/amd64 and linux/arm64, and builds the full image, runs every tool and checks that no Debian update is pending (needs podman or docker and network).
+- Tests that the Dockerfile pins its base by digest, pins each tool with an amd64 and an arm64 hash, checks every download, pipes nothing into a shell and runs `apt-get upgrade`.
+
+### Removed
+
+- The "older than the default" toolchain warning from v0.5.0, replaced by the warning above.
+
+### Upgrading
+
+Run `make install`; it replaces `~/.config/cclaude/Dockerfile`. If your `config.toml` still has `go_version` / `node_version` (installs before v0.5.0 wrote `"1.23.4"` and `"20"` there), delete those lines and the `[toolchain]` header, then run `cclaude --build`. The build works without this step, but warns until you do. To build with another version, edit that tool's `ARG` lines in the Dockerfile (version and both hashes).
+
 ## [0.5.0] - 2026-10-25
 
 ### Security

@@ -9,7 +9,7 @@
 - **Security isolation**: Claude Code runs in a container and can only access the mounted project directory.
 - **Memory persistence**: `~/.claude/` (project memory, settings, conversation history) is preserved across container restarts.
 - **Subscription & API key support**: Works with both Claude subscription (OAuth) and API key authentication.
-- **Pre-installed toolchains**: Go, Node.js, and Python (uv) are ready to use out of the box.
+- **Pre-installed toolchains**: Go, Node.js, and Python (uv) are ready to use out of the box, each pinned to an exact version and checked against its upstream SHA256.
 - **No sandbox issues**: Container-level isolation eliminates sandbox mode incompatibilities with build tools.
 - **Auto-detection**: Automatically detects Podman or Docker; prefers Podman.
 - **Customizable**: TOML config file with environment variable overrides. Extend the Dockerfile for additional toolchains.
@@ -128,10 +128,6 @@ image = "cclaude:latest"
 # forward_ports = [8080, 11434]    # host → container (socat)
 # publish_ports = [3000, 5173]     # container → host (-p)
 
-[toolchain]
-# go_version = "1.27.3"   # leave commented out to follow the defaults
-# node_version = "24"     # a Node.js major line (NodeSource)
-
 [paths]
 claude_home = "~/.claude"
 ```
@@ -147,22 +143,20 @@ claude_home = "~/.claude"
 | `CCC_FORWARD_PORTS` | Ports forwarded host → container (e.g., `8080,11434`) | — |
 | `CCC_PUBLISH_PORTS` | Ports published container → host (e.g., `3000,5173`) | — |
 | `CCC_CLAUDE_HOME` | Claude home directory | `~/.claude` |
-| `CCC_GO_VERSION` | Go release for image build | `1.27.3` |
-| `CCC_NODE_VERSION` | Node.js major line for image build | `24` |
 | `CCC_DRY_RUN=1` | Print container command without executing | — |
 
 ### Toolchain versions
 
-A version set in `config.toml` or the environment is used as written. A new cclaude release moves only the defaults.
+The Dockerfile pins every tool to an exact version, together with the SHA256 its upstream author publishes for amd64 and arm64 (see [Security: what the image build downloads](#security-what-the-image-build-downloads)). A new cclaude release moves them. `cclaude --config` lists the versions your Dockerfile pins.
 
-Earlier versions of `make install` wrote `go_version = "1.23.4"` and `node_version = "20"` into `config.toml`. Both have reached end of life and get no more security fixes (Node.js 20 on 2026-04-30). If your `config.toml` still sets a version older than the default, `cclaude --build` and `cclaude --config` print a warning. Remove or comment out those lines, then rebuild:
+Since v0.6.0, `go_version` and `node_version` under `[toolchain]`, and `CCC_GO_VERSION` / `CCC_NODE_VERSION`, are no longer read: a version cannot be changed without its hashes. If one is still set, `cclaude --build` and `cclaude --config` print a warning and the build uses the pinned versions. Earlier versions of `make install` wrote `go_version = "1.23.4"` and `node_version = "20"` into `config.toml`. Remove those lines, then rebuild:
 
 ```bash
-cclaude --config   # check go_version and node_version under [toolchain]
+cclaude --config   # warns about each setting that is ignored
 cclaude --build
 ```
 
-`go_version` takes an exact Go release, and `node_version` a major line from NodeSource. Use versions that are still supported ([Go release history](https://go.dev/doc/devel/release), [Node.js release schedule](https://github.com/nodejs/release#release-schedule)).
+To build with another version, edit its `ARG` lines in `~/.config/cclaude/Dockerfile`: the version and both hashes, copied from the checksum file named in the comment above them. `make install` replaces that file with the release's Dockerfile.
 
 ---
 
@@ -270,13 +264,29 @@ The default image includes Go, Node.js, and Python (uv). To add more toolchains:
 2. Add your packages (e.g., Rust, Java, Ruby)
 3. Rebuild: `cclaude --build`
 
+Anything you add is downloaded on every rebuild. Fetch it the way the Dockerfile fetches its own tools, so a rebuild cannot take a file nobody checked: an exact version, and the SHA256 its author publishes, checked with `sha256sum -c` before the file is used. Piping an install script into a shell (`curl … | sh`) skips that check.
+
 ### Example: Adding Rust
 
 ```dockerfile
-# Append to Dockerfile
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+# Append to Dockerfile. rustup-init at an exact version; each hash is the
+# rustup-init.sha256 published next to it under static.rust-lang.org/rustup/archive/
+ARG RUSTUP_VERSION=1.29.2
+ARG RUSTUP_SHA256_AMD64=5be191e8c70a5007074254cb74d78dbfdd25cd5a61c27de7b8e5410122ec24f4
+ARG RUSTUP_SHA256_ARM64=a9c168dbea81a84671c6b7a5c1795cb0eb699020110d107ddfca427bd797e697
+RUN case "$(dpkg --print-architecture)" in \
+         amd64) sha="$RUSTUP_SHA256_AMD64"; triple=x86_64-unknown-linux-gnu ;; \
+         arm64) sha="$RUSTUP_SHA256_ARM64"; triple=aarch64-unknown-linux-gnu ;; \
+         *) echo "unsupported architecture" >&2; exit 1 ;; \
+       esac \
+    && curl -fsSLo /tmp/rustup-init "https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/${triple}/rustup-init" \
+    && echo "${sha}  /tmp/rustup-init" | sha256sum -c - \
+    && chmod +x /tmp/rustup-init && /tmp/rustup-init -y --no-modify-path --default-toolchain 1.99.1 \
+    && rm /tmp/rustup-init
 ENV PATH="/root/.cargo/bin:${PATH}"
 ```
+
+`--default-toolchain` pins the Rust release too; without it, every rebuild installs whatever `stable` is that day. rustup checks the toolchain's files against the SHA256 in that release's channel manifest, which it downloads from `static.rust-lang.org` during the build.
 
 ### Example: Adding Java (Eclipse Temurin)
 
@@ -298,7 +308,8 @@ dist/cclaude        ← build output (make build)
 Dockerfile          ← container image definition
 config.toml.example ← default config template
 npmrc.example       ← npm security hardening template
-test/               ← BATS test suite
+test/               ← BATS test suite (make test)
+test/image/         ← image tests: builds the Dockerfile (make test-image)
 ```
 
 ### Prerequisites
@@ -321,6 +332,10 @@ make build        # build src/cclaude.sh → dist/cclaude (with version injectio
 make install      # install to /usr/local/bin
 make image-build  # build container image
 make test         # shellcheck + BATS tests
+make test-image   # build the Dockerfile: a wrong SHA256 must fail each download,
+                  # each pinned SHA256 must match on amd64 and arm64, and the full
+                  # image must build and run every tool (podman/docker, network,
+                  # about 2 GB of downloads)
 make lint         # shellcheck only
 make clean        # remove dist/
 ```
@@ -353,21 +368,27 @@ Note: other users on the same host cannot connect because they do not possess th
 
 ### Security: what the image build downloads
 
-`cclaude --build` builds with `--no-cache`, and the Dockerfile runs `apt-get upgrade`, so each rebuild takes Debian's security updates. The other tools are downloaded during the build. Several of them are **not** checked against a SHA256 published by their upstream authors:
+Every download is pinned, and each file is checked against a SHA256 its upstream author publishes before it is unpacked:
 
-| Tool | How it is fetched | What verifies it |
-|------|-------------------|------------------|
-| Debian packages | `debian:bookworm-slim` (by tag, not digest), then apt | apt signatures |
-| Go | `go.dev/dl` tarball of `go_version` | nothing (no SHA256 check) |
-| Node.js | NodeSource `setup_<line>.x` script piped to `bash`, then the newest `nodejs` of that line from NodeSource's apt repository | the script: nothing; its signing key: HTTPS only; the packages: apt signatures with that key |
-| uv | `astral.sh/uv/install.sh` piped to `sh` (latest) | the script: nothing; the script checks the archive against SHA256 values written in it |
-| Claude Code | `claude.ai/install.sh` piped to `bash` (latest) | the script: nothing; the script checks the binary against the SHA256 in the release manifest on the same server |
-| GitHub CLI | release tarball of the version the GitHub API reports as latest | nothing |
-| golangci-lint | `install.sh` from the repository's `HEAD` piped to `sh` (latest release) | the script: nothing; the script checks the archive against the release's checksums file |
+| What | Pinned to | Checked against |
+|------|-----------|-----------------|
+| Base image | the multi-arch index digest of `debian:bookworm-slim` (amd64 and arm64) | the digest |
+| Debian packages | the Debian release in that base; `apt-get upgrade` takes its updates | apt signatures |
+| Go | an exact release from `go.dev/dl` | SHA256 from `go.dev/dl/?mode=json` |
+| Node.js | an exact release, the official build from `nodejs.org/dist` | `SHASUMS256.txt` of that release |
+| uv | an exact GitHub release | `sha256.sum` of that release |
+| Claude Code | an exact release of the native binary from `downloads.claude.ai` | the checksum in that release's `manifest.json` |
+| GitHub CLI | an exact GitHub release | `gh_<version>_checksums.txt` of that release |
+| golangci-lint | an exact GitHub release | `golangci-lint-<version>-checksums.txt` of that release |
 
-So a rebuild can take whatever any of these upstreams serve at that moment. If that matters for your use, pin versions and add SHA256 checks in your copy of the Dockerfile (`~/.config/cclaude/Dockerfile`).
+The hashes for amd64 and arm64 are written in the Dockerfile, and `sha256sum -c` fails the build on a mismatch. `make test-image` builds each download with a wrong hash and expects the build to fail, checks every pinned hash against the real file on both architectures, and builds the whole image.
 
-Not done yet: pinning the base image by digest and installing each tool at an exact version checked against its upstream SHA256 (a hash lock). That would change `go_version` and `node_version` into exact versions that come with their hashes, so it is left to a later release with its own design.
+So `cclaude --build` (`--no-cache`) reproduces the release and takes only Debian's updates on its own, whose signatures apt verifies. A new base image or a new version of a tool arrives with a new cclaude release. That includes security fixes: a fix in Node.js or Go reaches the image when a release moves its pin, not when you rebuild.
+
+Not covered:
+- The hashes were copied from the checksum files on the same servers as the files. The GPG signature over Node.js's `SHASUMS256.txt` and the signature of Claude Code's manifest are not checked.
+- Packages that the tools fetch while you work (npm, Go modules, uv) are outside the image build. For npm, see `npmrc.example`.
+- Each `--no-cache` rebuild leaves the previous image untagged. Remove those with `podman image prune` (or `docker image prune`).
 
 ---
 
