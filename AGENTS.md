@@ -48,6 +48,9 @@ test/image/          BATS run by make test-image (builds stages with podman/dock
   A bats `! cmd` never fails a test (errexit ignores negation) — use
   `run cmd; [ "$status" -eq 1 ]`; likewise a function called as `f || …`
   runs without errexit, so make its last expression carry every check.
+  bats runs under macOS's /bin/bash 3.2, where a `[[ … ]]` that is not the
+  last command of a test never fails it: use `[ … ]` or `[[ … ]] || return 1`.
+  macOS `mktemp -d` ignores `TMPDIR`, so a test cannot choose where it lands.
 - **The Dockerfile is the only place versions live.** `go_version` /
   `node_version` and `CCC_GO_VERSION` / `CCC_NODE_VERSION` are retired: read
   only to warn that they are ignored (installs before v0.5.0 wrote

@@ -415,9 +415,12 @@ STUB
     chmod +x "${stub}/podman"
     export STUB_LOG="${BATS_TEST_TMPDIR}/stub.log"
     export PATH="${stub}:${PATH}"
-    # mktemp -d lands here, so the test can see it is removed afterwards.
-    export TMPDIR="${BATS_TEST_TMPDIR}/tmp"
-    mkdir -p "$TMPDIR"
+}
+
+# The context the stub saw. macOS mktemp ignores TMPDIR, so the test checks
+# this exact path rather than a directory it chose.
+stub_context() {
+    sed -n 's/^context=//p' "$STUB_LOG"
 }
 
 @test "--build sends an empty context, not the config dir, and removes it" {
@@ -429,12 +432,14 @@ STUB
 
     CCC_RUNTIME=podman run bash "$CCC_SRC" --build
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "-f ${config_dir}/Dockerfile" ]]
-    run cat "$STUB_LOG"
-    [ "${#lines[@]}" -eq 1 ]
-    [[ "${lines[0]}" == "context=${TMPDIR}/"* ]]
-    [[ "${lines[0]}" != "context=${config_dir}" ]]
-    [ -z "$(ls -A "$TMPDIR")" ]
+    [[ "$output" =~ "-f ${config_dir}/Dockerfile" ]] || { echo "no -f: $output"; return 1; }
+    local ctx
+    ctx="$(stub_context)"
+    [ -n "$ctx" ]
+    [ "$ctx" != "$config_dir" ]
+    # Only the context= line: the stub's ls -A of the context printed nothing.
+    [ "$(wc -l < "$STUB_LOG")" -eq 1 ]
+    [ ! -e "$ctx" ]
 }
 
 @test "--build removes the empty context when the build fails" {
@@ -443,8 +448,11 @@ STUB
 
     STUB_EXIT=3 CCC_RUNTIME=podman run bash "$CCC_SRC" --build
     [ "$status" -eq 3 ]
-    [[ ! "$output" =~ "built successfully" ]]
-    [ -z "$(ls -A "$TMPDIR")" ]
+    [[ ! "$output" =~ "built successfully" ]] || { echo "reported success"; return 1; }
+    local ctx
+    ctx="$(stub_context)"
+    [ -n "$ctx" ]
+    [ ! -e "$ctx" ]
 }
 
 # =========================================================================
