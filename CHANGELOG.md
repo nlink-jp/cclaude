@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [Unreleased]
+
+### Security
+
+- **Default Node.js line moves from 20 to 24.** Node.js 20 reached end of life on 2026-04-30 and gets no more security releases, including the October 2026 one that fixes the Brotli decoder out-of-bounds write in `node:zlib` (CVE-2026-111497). Node 24 is an LTS line supported until 2028-04-30. Measured in a freshly built image: `node --version` is `v24.22.1` (the October 2026 security release).
+- **Default Go moves from 1.23.4 to 1.27.3.** Go 1.23 left support when 1.25 shipped (Go supports each major release until two newer ones exist). 1.27.3 is the newest patch of the newest major release.
+- The Dockerfile runs `apt-get upgrade` before installing packages. Before this, packages already in the `debian:bookworm-slim` base stayed at the base's versions even with `--no-cache` (an image built without it still had a pending `tzdata` security update).
+
+### Added
+
+- `cclaude --build` and `cclaude --config` warn when `go_version` or `node_version` (config.toml, `CCC_GO_VERSION`, `CCC_NODE_VERSION`) is older than the default.
+- README: a table of what the image build downloads and what verifies each download. Several tools are piped from install scripts or fetched as "latest" without a SHA256 check against their upstream authors. This is recorded, not fixed, in this release; a digest pin plus hash lock is left for a later release.
+
+### Changed
+
+- `config.toml.example` leaves `go_version` and `node_version` commented out, so new installs follow the defaults.
+
+### Upgrading
+
+`make install` does not overwrite an existing `config.toml`. Earlier installs wrote `go_version = "1.23.4"` and `node_version = "20"` there, and those values still win over the new defaults. Remove or comment out both lines, then run `cclaude --build`. The new warnings point at them.
+
 ## [0.4.1] - 2026-04-05
 
 ### Changed

@@ -288,3 +288,131 @@ image = "from-config:v1"'
     [ "$status" -eq 0 ]
     [[ "$output" =~ "custom:v1 claude" ]]
 }
+
+# =========================================================================
+# Toolchain versions
+# =========================================================================
+
+@test "default node_version is 24 and prints no warning" {
+    CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "node_version  = 24" ]]
+    [[ ! "$output" =~ "warning" ]]
+}
+
+@test "node_version older than the default warns" {
+    setup_config '[toolchain]
+node_version = "20"'
+
+    CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "node_version  = 20" ]]
+    [[ "$output" =~ "warning: node_version = 20 is older than the default Node.js line (24)" ]]
+
+    teardown_config
+}
+
+@test "CCC_NODE_VERSION older than the default warns" {
+    CCC_NODE_VERSION=22 CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "warning: node_version = 22 is older" ]]
+}
+
+@test "node_version at or above the default does not warn" {
+    CCC_NODE_VERSION=26 CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "node_version  = 26" ]]
+    [[ ! "$output" =~ "warning" ]]
+}
+
+@test "non-numeric node_version does not warn or fail" {
+    CCC_NODE_VERSION=lts CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "warning" ]]
+}
+
+@test "config.toml.example leaves toolchain versions to the defaults" {
+    CCC_CONFIG_FILE="${BATS_TEST_DIRNAME}/../config.toml.example" CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "go_version    = 1.27.3" ]]
+    [[ "$output" =~ "node_version  = 24" ]]
+    [[ ! "$output" =~ "warning" ]]
+}
+
+@test "default go_version is 1.27.3" {
+    CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "go_version    = 1.27.3" ]]
+}
+
+@test "go_version older than the default warns" {
+    setup_config '[toolchain]
+go_version = "1.23.4"
+node_version = "20"'
+
+    CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "warning: go_version = 1.23.4 is older than the default Go version (1.27.3)" ]]
+    [[ "$output" =~ "warning: node_version = 20 is older than the default Node.js line (24)" ]]
+    [[ "$output" =~ "Remove node_version from ${CCC_TEST_CONFIG}" ]]
+
+    teardown_config
+}
+
+@test "warning from an environment variable says to unset it" {
+    CCC_NODE_VERSION=20 CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Unset CCC_NODE_VERSION to follow the default" ]]
+    [[ ! "$output" =~ "Remove node_version" ]]
+}
+
+@test "--build warns about an old toolchain and passes the versions as build args" {
+    local stub="${BATS_TEST_TMPDIR}/bin"
+    mkdir -p "$stub"
+    printf '#!/bin/sh\nprintf "podman %%s\\n" "$*"\n' > "${stub}/podman"
+    chmod +x "${stub}/podman"
+    mkdir -p "${BATS_TEST_TMPDIR}/xdg/cclaude"
+    touch "${BATS_TEST_TMPDIR}/xdg/cclaude/Dockerfile"
+    setup_config '[toolchain]
+node_version = "20"'
+
+    XDG_CONFIG_HOME="${BATS_TEST_TMPDIR}/xdg" PATH="${stub}:${PATH}" CCC_RUNTIME=podman run bash "$CCC_SRC" --build
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "warning: node_version = 20 is older" ]]
+    [[ "$output" =~ "--build-arg NODE_VERSION=20" ]]
+    [[ "$output" =~ "--build-arg GO_VERSION=1.27.3" ]]
+
+    teardown_config
+}
+
+@test "older patch of the default Go line warns" {
+    CCC_GO_VERSION=1.27.0 CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "warning: go_version = 1.27.0 is older" ]]
+}
+
+@test "newer go_version does not warn (numeric, not lexical, compare)" {
+    CCC_GO_VERSION=1.100.0 CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "warning" ]]
+}
+
+@test "go_version 1.28.0 does not warn" {
+    CCC_GO_VERSION=1.28.0 CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "warning" ]]
+}
+
+@test "non-numeric go_version does not warn or fail" {
+    CCC_GO_VERSION=1.28rc1 CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$CCC_SRC" --config
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "warning" ]]
+}
+
+@test "Dockerfile ARG defaults match the script defaults" {
+    local go node
+    go="$(sed -n 's/^CCC_DEFAULT_GO_VERSION="\(.*\)"$/\1/p' "$CCC_SRC")"
+    node="$(sed -n 's/^CCC_DEFAULT_NODE_VERSION="\(.*\)"$/\1/p' "$CCC_SRC")"
+    grep -qx "ARG GO_VERSION=${go}" "${BATS_TEST_DIRNAME}/../Dockerfile"
+    grep -qx "ARG NODE_VERSION=${node}" "${BATS_TEST_DIRNAME}/../Dockerfile"
+}

@@ -7,7 +7,11 @@
 FROM debian:bookworm-slim
 
 # ---- System dependencies ----
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# `upgrade` takes Debian's security updates for packages already in the base
+# image; `install` alone leaves them at the base's versions.
+RUN export DEBIAN_FRONTEND=noninteractive \
+    && apt-get update && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
         build-essential \
         ca-certificates \
         curl \
@@ -24,14 +28,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # ---- Go ----
-ARG GO_VERSION=1.23.4
+# A supported release (https://go.dev/doc/devel/release).
+ARG GO_VERSION=1.27.3
 RUN ARCH="$(dpkg --print-architecture)" \
     && curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${ARCH}.tar.gz" \
        | tar -C /usr/local -xz
 ENV PATH="/usr/local/go/bin:/root/go/bin:${PATH}"
 
 # ---- Node.js (for user projects) ----
-ARG NODE_VERSION=20
+# A major line from NodeSource; pick one that is still supported
+# (https://github.com/nodejs/release#release-schedule).
+ARG NODE_VERSION=24
 RUN curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*

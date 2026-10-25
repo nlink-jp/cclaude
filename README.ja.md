@@ -120,8 +120,8 @@ image = "cclaude:latest"
 # publish_ports = [3000, 5173]     # コンテナ→ホスト (-p)
 
 [toolchain]
-go_version = "1.23.4"
-node_version = "20"
+# go_version = "1.27.3"   # 既定値に従うならコメントアウトのまま
+# node_version = "24"     # Node.js のメジャー系列（NodeSource）
 
 [paths]
 claude_home = "~/.claude"
@@ -138,9 +138,22 @@ claude_home = "~/.claude"
 | `CCC_FORWARD_PORTS` | ホスト→コンテナ転送ポート（例: `8080,11434`） | — |
 | `CCC_PUBLISH_PORTS` | コンテナ→ホスト公開ポート（例: `3000,5173`） | — |
 | `CCC_CLAUDE_HOME` | Claude ホームディレクトリ | `~/.claude` |
-| `CCC_GO_VERSION` | イメージビルド時の Go バージョン | `1.23.4` |
-| `CCC_NODE_VERSION` | イメージビルド時の Node.js バージョン | `20` |
+| `CCC_GO_VERSION` | イメージビルド時の Go リリース | `1.27.3` |
+| `CCC_NODE_VERSION` | イメージビルド時の Node.js メジャー系列 | `24` |
 | `CCC_DRY_RUN=1` | コンテナコマンドを実行せず表示のみ | — |
+
+### ツールチェーンのバージョン
+
+`config.toml` や環境変数で指定したバージョンは、書かれたとおりに使われます。cclaude の新しいリリースが変えるのは既定値だけです。
+
+以前の `make install` は `config.toml` に `go_version = "1.23.4"` と `node_version = "20"` を書き込んでいました。どちらもサポートが終了しており、セキュリティ修正はもう出ません（Node.js 20 は 2026-04-30 に終了）。`config.toml` が既定値より古いバージョンを指定していると、`cclaude --build` と `cclaude --config` が警告を出します。それらの行を削除するかコメントアウトしてから、リビルドしてください:
+
+```bash
+cclaude --config   # [toolchain] の go_version と node_version を確認
+cclaude --build
+```
+
+`go_version` には Go の正確なリリースを、`node_version` には NodeSource のメジャー系列を指定します。サポート中のものを選んでください（[Go リリース履歴](https://go.dev/doc/devel/release)、[Node.js リリーススケジュール](https://github.com/nodejs/release#release-schedule)）。
 
 ## 仕組み
 
@@ -327,6 +340,24 @@ SELinux 環境でのバインドマウントが正しく動作します。
 `--ssh` モードでは、コンテナ内で sshd が動作し、**ランダムな高ポート**（49152–65535）で `127.0.0.1` のみにバインドされます。アクセスはセッションごとに生成・破棄されるエフェメラル ed25519 鍵ペアで保護されます。パスワード認証は無効です。
 
 注意: 同一ホスト上の他のユーザーはエフェメラル秘密鍵を持たないため接続できませんが、ポート自体は `127.0.0.1` から到達可能です。共有ホスト環境で懸念がある場合は、追加のネットワーク隔離を検討してください。
+
+### セキュリティ: イメージビルドがダウンロードするもの
+
+`cclaude --build` は `--no-cache` でビルドし、Dockerfile が `apt-get upgrade` を実行するため、リビルドのたびに Debian のセキュリティ更新が入ります。それ以外のツールはビルド中にダウンロードされ、そのうちいくつかは上流の作者が公開する SHA256 と照合されて**いません**:
+
+| ツール | 取得方法 | 検証するもの |
+|--------|----------|--------------|
+| Debian パッケージ | `debian:bookworm-slim`（タグ指定でダイジェスト固定なし）→ apt | apt の署名 |
+| Go | `go_version` の `go.dev/dl` tarball | なし（SHA256 照合なし） |
+| Node.js | NodeSource の `setup_<系列>.x` スクリプトを `bash` にパイプ → NodeSource の apt リポジトリからその系列の最新 `nodejs` | スクリプト: なし。署名鍵: HTTPS のみ。パッケージ: その鍵による apt の署名 |
+| uv | `astral.sh/uv/install.sh` を `sh` にパイプ（最新版） | スクリプト: なし。スクリプトが自身に書かれた SHA256 でアーカイブを照合 |
+| Claude Code | `claude.ai/install.sh` を `bash` にパイプ（最新版） | スクリプト: なし。スクリプトが同じサーバのリリースマニフェストの SHA256 でバイナリを照合 |
+| GitHub CLI | GitHub API が最新と返す版のリリース tarball | なし |
+| golangci-lint | リポジトリの `HEAD` にある `install.sh` を `sh` にパイプ（最新リリース） | スクリプト: なし。スクリプトがリリースの checksums ファイルでアーカイブを照合 |
+
+つまりリビルドは、その時点でこれらの上流が配っているものを何でも取り込みえます。それが問題になる用途では、手元の Dockerfile（`~/.config/cclaude/Dockerfile`）でバージョンを固定し SHA256 の照合を加えてください。
+
+未対応: ベースイメージをダイジェストで固定し、各ツールを正確なバージョンで上流の SHA256 と照合して入れること（ハッシュロック）。これをやると `go_version` と `node_version` が「ハッシュを伴う正確なバージョン」に変わるため、独自の設計を立てて後のリリースで扱います。
 
 ## ライセンス
 

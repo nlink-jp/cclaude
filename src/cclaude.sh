@@ -5,6 +5,10 @@ set -euo pipefail
 
 CCC_VERSION="0.1.0"
 CCC_DEFAULT_IMAGE="cclaude:latest"
+# Supported releases: https://go.dev/doc/devel/release
+CCC_DEFAULT_GO_VERSION="1.27.3"
+# A supported Node.js LTS line: https://github.com/nodejs/release#release-schedule
+CCC_DEFAULT_NODE_VERSION="24"
 CCC_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cclaude"
 CCC_CONFIG_FILE="${CCC_CONFIG_FILE:-${CCC_CONFIG_DIR}/config.toml}"
 
@@ -138,6 +142,48 @@ detect_runtime() {
     fi
 }
 
+# version_lt A B — true when dotted numeric version A is lower than B
+# (1.23.4 < 1.27.3, 20 < 24). False when either is not dotted numeric.
+version_lt() {
+    local a="$1" b="$2"
+    [[ "$a" =~ ^[0-9]+(\.[0-9]+)*$ && "$b" =~ ^[0-9]+(\.[0-9]+)*$ ]] || return 1
+    local -a av bv
+    IFS=. read -r -a av <<< "$a"
+    IFS=. read -r -a bv <<< "$b"
+    local i n=$(( ${#av[@]} > ${#bv[@]} ? ${#av[@]} : ${#bv[@]} ))
+    for (( i = 0; i < n; i++ )); do
+        local x=$(( 10#${av[i]:-0} )) y=$(( 10#${bv[i]:-0} ))
+        (( x < y )) && return 0
+        (( x > y )) && return 1
+    done
+    return 1
+}
+
+# toolchain_warning KEY LABEL ENV_VAR VERSION DEFAULT — print a warning message
+# when VERSION is older than DEFAULT (e.g. a config.toml written by an earlier
+# install). Prints nothing otherwise.
+toolchain_warning() {
+    local key="$1" label="$2" env_var="$3" ver="$4" default="$5"
+    version_lt "$ver" "$default" || return 0
+    local fix
+    if [[ -n "${!env_var:-}" ]]; then
+        fix="Unset ${env_var}"
+    else
+        fix="Remove ${key} from ${CCC_CONFIG_FILE}"
+    fi
+    printf '%s = %s is older than the default %s (%s) and may no longer get security fixes. %s to follow the default, then run cclaude --build.' \
+        "$key" "$ver" "$label" "$default" "$fix"
+}
+
+# warn_old_toolchains GO_VERSION NODE_VERSION
+warn_old_toolchains() {
+    local msg
+    msg="$(toolchain_warning go_version "Go version" CCC_GO_VERSION "$1" "$CCC_DEFAULT_GO_VERSION")"
+    if [[ -n "$msg" ]]; then warn "$msg"; fi
+    msg="$(toolchain_warning node_version "Node.js line" CCC_NODE_VERSION "$2" "$CCC_DEFAULT_NODE_VERSION")"
+    if [[ -n "$msg" ]]; then warn "$msg"; fi
+}
+
 # ---------------------------------------------------------------------------
 # Image management
 # ---------------------------------------------------------------------------
@@ -171,8 +217,9 @@ build_image() {
     context_dir="$(dirname "$dockerfile")"
 
     local go_ver node_ver
-    go_ver="$(resolve CCC_GO_VERSION toolchain go_version 1.23.4)"
-    node_ver="$(resolve CCC_NODE_VERSION toolchain node_version 20)"
+    go_ver="$(resolve CCC_GO_VERSION toolchain go_version "$CCC_DEFAULT_GO_VERSION")"
+    node_ver="$(resolve CCC_NODE_VERSION toolchain node_version "$CCC_DEFAULT_NODE_VERSION")"
+    warn_old_toolchains "$go_ver" "$node_ver"
 
     printf 'cclaude: building image %s ...\n' "$image" >&2
     "$runtime" build --no-cache \
@@ -641,6 +688,10 @@ show_config() {
     image="$(resolve CCC_IMAGE container image "$CCC_DEFAULT_IMAGE")"
     host_claude_home="$(resolve CCC_CLAUDE_HOME paths claude_home "$HOME/.claude")"
     host_claude_home="${host_claude_home/#\~/$HOME}"
+    local go_ver node_ver
+    go_ver="$(resolve CCC_GO_VERSION toolchain go_version "$CCC_DEFAULT_GO_VERSION")"
+    node_ver="$(resolve CCC_NODE_VERSION toolchain node_version "$CCC_DEFAULT_NODE_VERSION")"
+    warn_old_toolchains "$go_ver" "$node_ver"
 
     cat <<EOF
 cclaude v${CCC_VERSION}
@@ -655,8 +706,8 @@ config_file        = ${CCC_CONFIG_FILE}
 project_dir        = $(pwd)
 
 [toolchain] (used at image build time)
-go_version    = $(resolve CCC_GO_VERSION toolchain go_version 1.23.4)
-node_version  = $(resolve CCC_NODE_VERSION toolchain node_version 20)
+go_version    = ${go_ver}
+node_version  = ${node_ver}
 
 [network]
 forward_ports = $(

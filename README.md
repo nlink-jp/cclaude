@@ -129,8 +129,8 @@ image = "cclaude:latest"
 # publish_ports = [3000, 5173]     # container → host (-p)
 
 [toolchain]
-go_version = "1.23.4"
-node_version = "20"
+# go_version = "1.27.3"   # leave commented out to follow the defaults
+# node_version = "24"     # a Node.js major line (NodeSource)
 
 [paths]
 claude_home = "~/.claude"
@@ -147,9 +147,22 @@ claude_home = "~/.claude"
 | `CCC_FORWARD_PORTS` | Ports forwarded host → container (e.g., `8080,11434`) | — |
 | `CCC_PUBLISH_PORTS` | Ports published container → host (e.g., `3000,5173`) | — |
 | `CCC_CLAUDE_HOME` | Claude home directory | `~/.claude` |
-| `CCC_GO_VERSION` | Go version for image build | `1.23.4` |
-| `CCC_NODE_VERSION` | Node.js version for image build | `20` |
+| `CCC_GO_VERSION` | Go release for image build | `1.27.3` |
+| `CCC_NODE_VERSION` | Node.js major line for image build | `24` |
 | `CCC_DRY_RUN=1` | Print container command without executing | — |
+
+### Toolchain versions
+
+A version set in `config.toml` or the environment is used as written. A new cclaude release moves only the defaults.
+
+Earlier versions of `make install` wrote `go_version = "1.23.4"` and `node_version = "20"` into `config.toml`. Both have reached end of life and get no more security fixes (Node.js 20 on 2026-04-30). If your `config.toml` still sets a version older than the default, `cclaude --build` and `cclaude --config` print a warning. Remove or comment out those lines, then rebuild:
+
+```bash
+cclaude --config   # check go_version and node_version under [toolchain]
+cclaude --build
+```
+
+`go_version` takes an exact Go release, and `node_version` a major line from NodeSource. Use versions that are still supported ([Go release history](https://go.dev/doc/devel/release), [Node.js release schedule](https://github.com/nodejs/release#release-schedule)).
 
 ---
 
@@ -337,6 +350,24 @@ When using Podman, `--security-opt label=disable` is automatically applied to al
 In `--ssh` mode, sshd runs inside the container and listens on a **random high port** (49152–65535) bound to `127.0.0.1` only. Access is protected by an ephemeral ed25519 key pair that is generated per session and destroyed on exit. No password authentication is allowed.
 
 Note: other users on the same host cannot connect because they do not possess the ephemeral private key, but the port is technically reachable from `127.0.0.1`. If this is a concern in shared-host environments, consider additional network isolation.
+
+### Security: what the image build downloads
+
+`cclaude --build` builds with `--no-cache`, and the Dockerfile runs `apt-get upgrade`, so each rebuild takes Debian's security updates. The other tools are downloaded during the build. Several of them are **not** checked against a SHA256 published by their upstream authors:
+
+| Tool | How it is fetched | What verifies it |
+|------|-------------------|------------------|
+| Debian packages | `debian:bookworm-slim` (by tag, not digest), then apt | apt signatures |
+| Go | `go.dev/dl` tarball of `go_version` | nothing (no SHA256 check) |
+| Node.js | NodeSource `setup_<line>.x` script piped to `bash`, then the newest `nodejs` of that line from NodeSource's apt repository | the script: nothing; its signing key: HTTPS only; the packages: apt signatures with that key |
+| uv | `astral.sh/uv/install.sh` piped to `sh` (latest) | the script: nothing; the script checks the archive against SHA256 values written in it |
+| Claude Code | `claude.ai/install.sh` piped to `bash` (latest) | the script: nothing; the script checks the binary against the SHA256 in the release manifest on the same server |
+| GitHub CLI | release tarball of the version the GitHub API reports as latest | nothing |
+| golangci-lint | `install.sh` from the repository's `HEAD` piped to `sh` (latest release) | the script: nothing; the script checks the archive against the release's checksums file |
+
+So a rebuild can take whatever any of these upstreams serve at that moment. If that matters for your use, pin versions and add SHA256 checks in your copy of the Dockerfile (`~/.config/cclaude/Dockerfile`).
+
+Not done yet: pinning the base image by digest and installing each tool at an exact version checked against its upstream SHA256 (a hash lock). That would change `go_version` and `node_version` into exact versions that come with their hashes, so it is left to a later release with its own design.
 
 ---
 
