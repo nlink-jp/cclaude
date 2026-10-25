@@ -9,7 +9,22 @@ load test_helper
 @test "--version prints version string" {
     run bash "$CCC_SRC" --version
     [ "$status" -eq 0 ]
-    [[ "$output" =~ ^cclaude\ [0-9]+\.[0-9]+\.[0-9] ]]
+    [[ "$output" =~ ^cclaude\ v[0-9]+\.[0-9]+\.[0-9] ]]
+}
+
+@test "--version, --help and --config print a stamped version with one v" {
+    # Stamp the way make build does: git describe gives "v0.6.0".
+    local stamped="${BATS_TEST_TMPDIR}/cclaude"
+    sed 's/^CCC_VERSION=".*"/CCC_VERSION="v9.8.7"/' "$CCC_SRC" > "$stamped"
+    use_repo_dockerfile
+
+    local args
+    for args in --version --help --config; do
+        CCC_DRY_RUN=1 CCC_RUNTIME=podman run bash "$stamped" "$args"
+        [ "$status" -eq 0 ]
+        [[ "$output" =~ "v9.8.7" ]] || { echo "no version: $args"; return 1; }
+        [[ ! "$output" =~ "vv" ]] || { echo "vv in: $args"; return 1; }
+    done
 }
 
 @test "--help prints usage" {

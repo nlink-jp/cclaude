@@ -3,7 +3,7 @@
 # https://github.com/nlink-jp/cclaude
 set -euo pipefail
 
-CCC_VERSION="0.1.0"
+CCC_VERSION="v0.1.0"
 CCC_DEFAULT_IMAGE="cclaude:latest"
 CCC_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cclaude"
 CCC_CONFIG_FILE="${CCC_CONFIG_FILE:-${CCC_CONFIG_DIR}/config.toml}"
@@ -691,7 +691,7 @@ show_config() {
     warn_retired_toolchain_keys
 
     cat <<EOF
-cclaude v${CCC_VERSION}
+cclaude ${CCC_VERSION}
 
 [resolved]
 runtime            = ${runtime}
@@ -729,7 +729,7 @@ EOF
 
 usage() {
     cat <<EOF
-cclaude — Containerized Claude Code v${CCC_VERSION}
+cclaude — Containerized Claude Code ${CCC_VERSION}
 
 Run Claude Code inside an isolated container with only the current project
 directory mounted. Claude Code state (~/.claude) is persisted on the host.
