@@ -384,6 +384,54 @@ node_version = "20"'
     teardown_config
 }
 
+# Stub runtime for --build: records the build context (last argument) and
+# what it holds, then exits with $STUB_EXIT.
+stub_build_runtime() {
+    local stub="${BATS_TEST_TMPDIR}/bin"
+    mkdir -p "$stub"
+    cat > "${stub}/podman" <<'STUB'
+#!/bin/sh
+for a; do ctx="$a"; done
+printf 'context=%s\n' "$ctx" > "$STUB_LOG"
+ls -A "$ctx" >> "$STUB_LOG"
+printf 'podman %s\n' "$*"
+exit "${STUB_EXIT:-0}"
+STUB
+    chmod +x "${stub}/podman"
+    export STUB_LOG="${BATS_TEST_TMPDIR}/stub.log"
+    export PATH="${stub}:${PATH}"
+    # mktemp -d lands here, so the test can see it is removed afterwards.
+    export TMPDIR="${BATS_TEST_TMPDIR}/tmp"
+    mkdir -p "$TMPDIR"
+}
+
+@test "--build sends an empty context, not the config dir, and removes it" {
+    stub_build_runtime
+    use_repo_dockerfile
+    local config_dir="${XDG_CONFIG_HOME}/cclaude"
+    echo '{"oauth":"secret"}' > "${config_dir}/claude.json"
+    mkdir -p "${config_dir}/claude-home"
+
+    CCC_RUNTIME=podman run bash "$CCC_SRC" --build
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "-f ${config_dir}/Dockerfile" ]]
+    run cat "$STUB_LOG"
+    [ "${#lines[@]}" -eq 1 ]
+    [[ "${lines[0]}" == "context=${TMPDIR}/"* ]]
+    [[ "${lines[0]}" != "context=${config_dir}" ]]
+    [ -z "$(ls -A "$TMPDIR")" ]
+}
+
+@test "--build removes the empty context when the build fails" {
+    stub_build_runtime
+    use_repo_dockerfile
+
+    STUB_EXIT=3 CCC_RUNTIME=podman run bash "$CCC_SRC" --build
+    [ "$status" -eq 3 ]
+    [[ ! "$output" =~ "built successfully" ]]
+    [ -z "$(ls -A "$TMPDIR")" ]
+}
+
 # =========================================================================
 # Dockerfile: every download pinned and hash-checked
 # =========================================================================

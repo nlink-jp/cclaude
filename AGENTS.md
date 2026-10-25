@@ -69,6 +69,12 @@ test/image/          BATS run by make test-image (builds stages with podman/dock
     linux/arm64.
   - Then `make test-image`: re-downloads with `--no-cache` and checks every
     hash on both arches, and builds the full image with `--no-cache`.
+- **`--build` sends an empty context.** `build_image` passes `-f <Dockerfile>`
+  and a `mktemp -d` directory as the context, removed by an EXIT trap on
+  failure (safe only because `build_image` runs before `--ssh` sets its own
+  EXIT trap). The Dockerfile's directory is `~/.config/cclaude/`, which holds
+  `claude-home/` and `claude.json`; never use it as the context, so the
+  Dockerfile must never `COPY`/`ADD` from its context.
 - **Rebuilds take only Debian's updates:** `--build` uses `--no-cache` and the
   final stage runs `apt-get upgrade`. Verify after a rebuild with
   `apt-get update && apt list --upgradable` in a throwaway container. A fix in

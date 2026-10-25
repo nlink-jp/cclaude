@@ -203,16 +203,23 @@ build_image() {
     local runtime="$1" image="$2"
     local dockerfile
     dockerfile="$(locate_dockerfile)"
-    local context_dir
-    context_dir="$(dirname "$dockerfile")"
 
     warn_retired_toolchain_keys
+
+    # Build from an empty context: the Dockerfile copies nothing, and its
+    # directory (~/.config/cclaude) holds claude-home/ and claude.json, which
+    # must not be sent to the builder.  The EXIT trap removes it when the
+    # build fails or is interrupted; build_image runs before any other trap.
+    _CCC_BUILD_CONTEXT="$(mktemp -d)"
+    trap 'rmdir "$_CCC_BUILD_CONTEXT"' EXIT
 
     printf 'cclaude: building image %s ...\n' "$image" >&2
     "$runtime" build --no-cache \
         -t "$image" \
         -f "$dockerfile" \
-        "$context_dir"
+        "$_CCC_BUILD_CONTEXT"
+    rmdir "$_CCC_BUILD_CONTEXT"
+    trap - EXIT
     printf 'cclaude: image %s built successfully.\n' "$image" >&2
 }
 

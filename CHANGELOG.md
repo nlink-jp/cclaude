@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [Unreleased]
+
+### Security
+
+- **`cclaude --build` builds from an empty temporary directory instead of the Dockerfile's directory.** For an installed user that directory is `~/.config/cclaude/`, which holds `claude-home/` (a copy of `~/.claude`) and `claude.json` (OAuth/session state); all of it was sent to the builder on every build, although the Dockerfile copies nothing. `-f` still names the same Dockerfile, and the temporary directory is removed after the build, also when it fails. A `COPY` or `ADD` of a local file added to the Dockerfile no longer works.
+
 ## [0.6.0] - 2026-10-26
 
 ### Security

@@ -266,6 +266,8 @@ The default image includes Go, Node.js, and Python (uv). To add more toolchains:
 
 Anything you add is downloaded on every rebuild. Fetch it the way the Dockerfile fetches its own tools, so a rebuild cannot take a file nobody checked: an exact version, and the SHA256 its author publishes, checked with `sha256sum -c` before the file is used. Piping an install script into a shell (`curl … | sh`) skips that check.
 
+`cclaude --build` builds from an empty, temporary directory, not from `~/.config/cclaude/`, so `claude-home/` and `claude.json` there are never sent to the builder. `COPY` and `ADD` of local files therefore do not work; download what you need instead, as above.
+
 ### Example: Adding Rust
 
 ```dockerfile
